@@ -1,0 +1,112 @@
+name: Track upstream Omarchy
+on:
+  schedule:
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Omarchy version to pin, e.g. 4.0.7 (default: latest stable tag)'
+        required: false
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+concurrency:
+  group: track-upstream
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    container: cachyos/cachyos:latest
+    steps:
+      - name: Install build tools
+        run: pacman -Syu --noconfirm --needed base-devel git github-cli imagemagick python sudo
+      - uses: actions/checkout@v7
+      - name: Pin the new release
+        id: bump
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tag() { (source pkgbuilds/omarchy-oncachy/PKGBUILD && echo "${_tag#v}"); }
+          old=$(tag)
+          bin/bump-omarchy.sh "$VERSION"
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          new=$(tag)
+          branch=upstream/omarchy-v$new
+          # A branch left from an earlier run means the update is already proposed (or was declined).
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "Branch $branch already exists; nothing to do."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          kind=$(bin/update-kind.sh "$old" "$new")
+          echo "Omarchy v$old -> v$new: $kind update"
+          { echo "changed=true"; echo "old=$old"; echo "new=$new"; echo "kind=$kind"; echo "branch=$branch"; } >> "$GITHUB_OUTPUT"
+      - name: Build the packages
+        id: build
+        if: steps.bump.outputs.changed == 'true'
+        continue-on-error: true
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          # Runtime dependencies come from [omarchy]; only the build itself is checked here.
+          sudo -u builder bin/build.sh --nodeps --noconfirm
+      - name: Run the tests
+        id: test
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        run: sudo -u builder env OMARCHY_TEST_SOURCE=.cache/build/omarchy-oncachy/src/omarchy python3 tests/test_package.py
+      - name: Write the review notes
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          OLD: ${{ steps.bump.outputs.old }}
+          NEW: ${{ steps.bump.outputs.new }}
+        run: bin/upstream-report.sh "$OLD" "$NEW" | tee -a "$GITHUB_STEP_SUMMARY" > "$RUNNER_TEMP/report.md"
+      - name: Publish a patch release
+        if: steps.bump.outputs.kind == 'patch' && steps.test.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW: ${{ steps.bump.outputs.new }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898283+github-actions[bot]@users.noreply.github.com'
+          git commit -am "Bump Omarchy to v$NEW" -m "Patch release: built, tested and published automatically."
+          git push origin HEAD:main
+          # Pushes made with the workflow token do not trigger other workflows.
+          gh workflow run publish.yml --ref main
+      - name: Open a pull request
+        if: steps.bump.outputs.changed == 'true' && !(steps.bump.outputs.kind == 'patch' && steps.test.outcome == 'success')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OLD: ${{ steps.bump.outputs.old }}
+          NEW: ${{ steps.bump.outputs.new }}
+          KIND: ${{ steps.bump.outputs.kind }}
+          BRANCH: ${{ steps.bump.outputs.branch }}
+          BUILD: ${{ steps.build.outcome }}
+          TEST: ${{ steps.test.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body=$(mktemp)
+          {
+            echo "Automated **$KIND** update from Omarchy v$OLD to v$NEW, opened by [this run]($RUN_URL)."
+            echo
+            echo "- Package build: **$BUILD**"
+            echo "- Tests: **$TEST**"
+            echo
+            echo "Checks ran in the run above: pull requests opened by GitHub Actions do not trigger other workflows."
+            echo "Before merging, review the notes below and test an install in a VM."
+            echo "Merging publishes the packages to the repository."
+            echo
+            cat "$RUNNER_TEMP/report.md"
+          } > "$body"
+          draft=()
+          [[ $BUILD == success && $TEST == success ]] || draft=(--draft)
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898283+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$BRANCH"
+          git commit -am "Bump Omarchy to v$NEW"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" --title "Bump Omarchy to v$NEW" --body-file "$body" "${draft[@]}"

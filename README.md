@@ -70,6 +70,16 @@ bin/build.sh --nodeps                 # packages in out/
 
 ## Follow Omarchy releases
 
+The *Track upstream Omarchy* workflow checks Omarchy's latest stable tag every day, pins it,
+builds the packages and runs the tests:
+
+- **patch release** (same X.Y, e.g. 4.0.6 → 4.0.7) that builds and passes the tests: committed to
+  `main` and published to the repository right away;
+- **minor or major release**, or a patch that fails: pull request with review notes, to test in
+  a VM before merging (draft if the build or the tests failed). Merging publishes it.
+
+A given version can be requested from the workflow's *Run workflow* button (prereleases included).
+
 - `bin/bump-omarchy.sh [VERSION]` pins another Omarchy tag (latest stable by default): version,
   commit, checksum and the meta package's dependencies.
 - `bin/upstream-report.sh OLD NEW` summarises what changed in the parts this project filters out

@@ -34,6 +34,21 @@ class ScriptTests(unittest.TestCase):
         self.assertRegex(pkgbuild_value('echo "$_commit"'), r'^[0-9a-f]{40}$')
         self.assertIn('#commit=$_commit', PKGBUILD.read_text())
 
+    def test_update_kind(self):
+        cases = {
+            ('4.0.6', '4.0.7'): 'patch',
+            ('v4.0.9', 'v4.0.10'): 'patch',
+            ('4.0.6', '4.1.0'): 'minor',
+            ('4.5.0-rc3', '4.5.0'): 'minor',
+            ('4.0.6', '5.0.0'): 'major',
+            ('4.0.6', '4.5.0-rc3'): 'prerelease',
+            ('4.0.6', '4.0.5'): 'downgrade',
+            ('4.5.0', '4.5.0-rc3'): 'downgrade',
+        }
+        for (old, new), kind in cases.items():
+            result = run(str(ROOT / 'bin/update-kind.sh'), old, new)
+            self.assertEqual(result.stdout.strip(), kind, f'{old} -> {new}: {result.stderr}')
+
     def test_desktop_depends_filter(self):
         with tempfile.TemporaryDirectory() as tmp:
             packages = Path(tmp) / 'omarchy-base.packages'

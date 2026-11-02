@@ -134,6 +134,14 @@ class UpstreamTests(unittest.TestCase):
         self.assertEqual(depends[0], 'omarchy-oncachy=' + pkgbuild_value('echo "$pkgver-$pkgrel"'))
         self.assertEqual(depends[1:], expected, 'run bin/sync-desktop-depends.sh')
 
+    def test_setup_sources_exist(self):
+        # Files omarchy-oncachy-setup copies from /usr/share/omarchy (the skel seed).
+        for path in ('config/hypr', 'default/bashrc', 'icon.txt', 'logo.txt', 'default/tensaku/state.toml',
+                     'default/hypr/toggles/flags.lua', 'default/nautilus-python/extensions',
+                     'bin/omarchy-provision-user', 'bin/omarchy-refresh-applications', 'default/hypr/input.lua'):
+            self.assertTrue((Path(SOURCE) / path).exists(), path)
+        self.assertIn('vconsole.XKBLAYOUT', (Path(SOURCE) / 'default/hypr/input.lua').read_text())
+
     def test_package_staging(self):
         with tempfile.TemporaryDirectory(prefix='omarchy package test ') as tmp:
             directory = Path(tmp)
@@ -160,6 +168,9 @@ class UpstreamTests(unittest.TestCase):
             self.assertTrue((payload / 'usr/share/omarchy/application-icons/hicolor').is_dir())
             self.assertFalse((payload / 'usr/share/icons/hicolor').exists())
             self.assertTrue((payload / 'usr/share/wayland-sessions/omarchy.desktop').is_file())
+            for path in ('etc/fastfetch/config.jsonc', 'etc/xdg/kitty/kitty.conf', 'usr/share/pixmaps/omarchy.png',
+                         'usr/share/omarchy/default/bashrc', 'usr/share/omarchy/logo.txt'):
+                self.assertTrue((payload / path).is_file(), path)
             for command in ('omarchy-update', 'omarchy-oncachy-setup'):
                 self.assertTrue((payload / 'usr/bin' / command).stat().st_mode & 0o111, command)
             for forbidden in ('boot', 'etc/mkinitcpio.conf.d', 'etc/limine-entry-tool.d',

@@ -4,7 +4,7 @@
 pkgbase=omarchy-oncachy
 pkgname=(omarchy-oncachy omarchy-oncachy-desktop)
 pkgver=4.0.6
-pkgrel=1
+pkgrel=2
 # Upstream tag and the commit it pointed to when reviewed (bin/bump-omarchy.sh).
 _tag=v4.0.6
 _commit=237f1b4071a0bff2296c6d740ba2b9fd695ebfa0
@@ -34,6 +34,7 @@ package_omarchy-oncachy() {
   pkgdesc='Omarchy desktop runtime and defaults adapted for CachyOS'
   provides=("omarchy=$pkgver" "omarchy-settings=$pkgver")
   conflicts=(omarchy omarchy-dev omarchy-settings omarchy-settings-dev)
+  backup=(etc/fastfetch/config.jsonc etc/xdg/kitty/kitty.conf)
   depends=(omarchy-keyring 'hyprland>=0.55' quickshell uwsm sddm xdg-desktop-portal-hyprland
     wireplumber pipewire gnome-keyring gum jq git perl fakeroot pacman-contrib
     ttf-jetbrains-mono-nerd-basic bash curl hicolor-icon-theme)
@@ -73,6 +74,10 @@ package_omarchy-oncachy() {
   # Use the existing SDDM configuration, adding a selectable session only.
   install -Dm644 default/wayland-sessions/omarchy.desktop "$pkgdir/usr/share/wayland-sessions/omarchy.desktop"
   install -Dm644 default/fonts/omarchy/omarchy.ttf "$pkgdir/usr/share/fonts/omarchy/omarchy.ttf"
+  # Defaults Omarchy's settings package puts in /etc; no CachyOS package owns them.
+  install -Dm644 etc/fastfetch/config.jsonc "$pkgdir/etc/fastfetch/config.jsonc"
+  install -Dm644 etc/xdg/kitty/kitty.conf "$pkgdir/etc/xdg/kitty/kitty.conf"
+  install -Dm644 icon.png "$pkgdir/usr/share/pixmaps/omarchy.png"
 
   # Application launchers and icons override defaults at user scope. Never own
   # /usr/share/applications/{foot,imv,mpv}.desktop or icons shipped by those apps.

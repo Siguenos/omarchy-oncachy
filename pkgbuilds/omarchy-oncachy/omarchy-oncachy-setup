@@ -87,12 +87,19 @@ user_setup() {
   cp -a "$OMARCHY_PATH/config/." "$HOME/.config/"
   mkdir -p "$HOME/.local/share/icons/hicolor" "$HOME/.local/share/applications"
   cp -a "$OMARCHY_PATH/application-icons/hicolor/." "$HOME/.local/share/icons/hicolor/"
-  for desktop in "$OMARCHY_PATH"/applications/hidden/*.desktop; do
-    [[ ! -f $desktop ]] || cp "$desktop" "$HOME/.local/share/applications/"
-  done
   mkdir -p "$HOME/.local/state/omarchy/toggles/hypr" "$HOME/.local/share/nautilus-python/extensions"
   cp "$OMARCHY_PATH/default/hypr/toggles/flags.lua" "$HOME/.local/state/omarchy/toggles/hypr/"
   cp "$OMARCHY_PATH"/default/nautilus-python/extensions/*.py "$HOME/.local/share/nautilus-python/extensions/"
+  # The rest of what Omarchy's settings package seeds through /etc/skel. The
+  # screensaver and About window read the branding files.
+  cp "$OMARCHY_PATH/default/bashrc" "$HOME/.bashrc"
+  mkdir -p "$HOME/.config/omarchy/branding" "$HOME/.local/state/tensaku"
+  [[ -e $HOME/.config/omarchy/branding/about.txt ]] ||
+    cp "$OMARCHY_PATH/icon.txt" "$HOME/.config/omarchy/branding/about.txt"
+  [[ -e $HOME/.config/omarchy/branding/screensaver.txt ]] ||
+    cp "$OMARCHY_PATH/logo.txt" "$HOME/.config/omarchy/branding/screensaver.txt"
+  [[ -e $HOME/.local/state/tensaku/state.toml ]] ||
+    cp "$OMARCHY_PATH/default/tensaku/state.toml" "$HOME/.local/state/tensaku/"
 
   # fcitx5 keeps its own layout list, which otherwise starts as US.
   read -r layout variant <<< "$(keyboard_layout)"

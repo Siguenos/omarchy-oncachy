@@ -1,0 +1,39 @@
+name: Publish
+on:
+  push:
+    branches: [main]
+    paths: ['pkgbuilds/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publish
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    container: cachyos/cachyos:latest
+    env:
+      # Public signing subkey of keys/omarchy-oncachy.asc; its secret half is GPG_PRIVATE_KEY.
+      SIGNING_KEY: 02AA039EC307C7DA1C9AF018468F92E58933DC1F
+    steps:
+      - name: Install build tools
+        run: pacman -Syu --noconfirm --needed base-devel git github-cli imagemagick python sudo
+      - uses: actions/checkout@v7
+      - name: Build the packages
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          sudo -u builder bin/build.sh --nodeps --noconfirm
+      - name: Run the tests
+        run: sudo -u builder env OMARCHY_TEST_SOURCE=.cache/build/omarchy-oncachy/src/omarchy python3 tests/test_package.py
+      - name: Sign and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          export GNUPGHOME=$(mktemp -d)
+          printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          bin/publish-repo.sh out

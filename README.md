@@ -39,6 +39,26 @@ cd omarchy-oncachy
 
 Reboot and log in to the Omarchy session. Updates come with `sudo pacman -Syu` (or `omarchy update`).
 
+### Repository
+
+`install.sh` sets this up; to do it by hand, import the signing key and add the repository
+(here after `[options]`, ahead of the other repositories):
+
+```bash
+sudo pacman-key --add keys/omarchy-oncachy.asc
+sudo pacman-key --lsign-key F5CC831F86EEDEF2988D958F9C2D1A8DCDB97DAB
+```
+
+```ini
+[omarchy-oncachy]
+SigLevel = Required
+Server = https://github.com/Siguenos/omarchy-oncachy/releases/download/repo
+```
+
+Packages and database are signed by the subkey `02AA039EC307C7DA1C9AF018468F92E58933DC1F` of
+`keys/omarchy-oncachy.asc`. The *Publish* workflow rebuilds, signs and uploads them to the
+`repo` release whenever `pkgbuilds/` changes on `main`.
+
 ## Build
 
 ```bash

@@ -9,9 +9,10 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 # Omarchy's own repository supplies Hyprland, quickshell and its desktop tools.
 OMARCHY_SERVER='https://pkgs.omarchy.org/stable/$arch'
 OMARCHY_KEY=40DFB630FF42BCFFB047046CF0134EE680CAC571
-# This project's repository, published as the GitHub release "repo".
+# This project's repository, published as the GitHub release "repo", and the
+# key that signs it (keys/omarchy-oncachy.asc).
 ONCACHY_SERVER='https://github.com/Siguenos/omarchy-oncachy/releases/download/repo'
-ONCACHY_KEY=''
+ONCACHY_KEY=F5CC831F86EEDEF2988D958F9C2D1A8DCDB97DAB
 
 usage() { sed -n '2,6s/^# \{0,1\}//p' "$0"; }
 yes=0 packages=''
@@ -39,9 +40,6 @@ if [[ -n $packages ]]; then
   for file in "${local_packages[@]}"; do
     [[ -f $file ]] || { echo "Missing package in $packages: run bin/build.sh first." >&2; exit 1; }
   done
-elif [[ -z $ONCACHY_KEY ]]; then
-  echo "The [omarchy-oncachy] repository is not published yet: build with bin/build.sh, then use --packages out." >&2
-  exit 1
 fi
 
 state="$HOME/.local/state/omarchy-oncachy"
@@ -66,9 +64,9 @@ new_config=$(mktemp)
 awk -v name=omarchy -v server="$OMARCHY_SERVER" -v siglevel='Required DatabaseOptional' \
   -f "$ROOT/bin/pacman-config.awk" /etc/pacman.conf > "$new_config"
 if [[ -z $packages ]]; then
-  sudo pacman-key --recv-keys "$ONCACHY_KEY" --keyserver keys.openpgp.org
+  sudo pacman-key --add "$ROOT/keys/omarchy-oncachy.asc"
   sudo pacman-key --lsign-key "$ONCACHY_KEY"
-  awk -v name=omarchy-oncachy -v server="$ONCACHY_SERVER" -v siglevel='Required DatabaseOptional' \
+  awk -v name=omarchy-oncachy -v server="$ONCACHY_SERVER" -v siglevel='Required' \
     -f "$ROOT/bin/pacman-config.awk" "$new_config" > "$new_config.2"
   mv "$new_config.2" "$new_config"
 fi

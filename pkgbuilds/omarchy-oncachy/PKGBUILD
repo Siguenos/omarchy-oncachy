@@ -3,11 +3,11 @@
 # desktop runtime and defaults, never Omarchy's system and boot stack.
 pkgbase=omarchy-oncachy
 pkgname=(omarchy-oncachy omarchy-oncachy-desktop)
-pkgver=4.0.6
-pkgrel=2
+pkgver=4.5.0rc3
+pkgrel=1
 # Upstream tag and the commit it pointed to when reviewed (bin/bump-omarchy.sh).
-_tag=v4.0.6
-_commit=237f1b4071a0bff2296c6d740ba2b9fd695ebfa0
+_tag=v4.5.0-rc3
+_commit=8d19ad75ace59af8b6ded52f8b2bec1b15adda7c
 arch=(x86_64)
 url='https://github.com/Siguenos/omarchy-oncachy'
 license=(MIT)
@@ -16,7 +16,7 @@ options=(!debug)
 # Local files live in this repository, so they are not checksummed.
 source=("omarchy::git+https://github.com/omacom/omarchy.git#commit=$_commit"
         omarchy-oncachy-setup)
-sha256sums=('f89ae5e85d18d8364f5c89ae05cd0fd170a8c4c93dd62e396b2b0a7fa5be4428'
+sha256sums=('cd3957ac70e26fa4f38c5c1ce7d34e0d366f715bc0cfdfcdc9749e13922a48b2'
             'SKIP')
 
 prepare() {
@@ -131,6 +131,7 @@ package_omarchy-oncachy-desktop() {
     alsa-utils
     asdcontrol
     avahi
+    base-devel
     bash-completion
     bat
     bluez
@@ -140,18 +141,17 @@ package_omarchy-oncachy-desktop() {
     brightnessctl
     btop
     chromium
-    clang
     cliamp
     cups
     cups-filters
     cups-pk-helper
     ddcutil
+    disktree-bin
     docker
     docker-buildx
     docker-compose
     dosfstools
     dotnet-runtime
-    dua-cli
     evince
     exfatprogs
     expac
@@ -159,14 +159,21 @@ package_omarchy-oncachy-desktop() {
     fakeroot
     fastfetch
     fcitx5
+    fcitx5-chewing
+    fcitx5-chinese-addons
     fcitx5-gtk
+    fcitx5-hangul
+    fcitx5-mozc
     fcitx5-qt
+    fcitx5-table-extra
     fd
+    ffmpeg
     ffmpegthumbnailer
     fontconfig
     foot
     fzf
     git
+    gliff
     gnome-disk-utility
     gnome-keyring
     gnome-themes-extra
@@ -177,6 +184,7 @@ package_omarchy-oncachy-desktop() {
     gvfs-nfs
     gvfs-smb
     herdr
+    hype
     hyprland
     hyprland-guiutils
     hyprland-preview-share-picker
@@ -188,21 +196,19 @@ package_omarchy-oncachy-desktop() {
     inotify-tools
     inxi
     jq
-    kdenlive
-    lazydocker
     lazygit
     less
     libreoffice-fresh
     libsecret
     libvips
     libyaml
-    llvm
     localsend
     lua51
     luarocks
     man-db
     mariadb-libs
     mise-bin
+    monologue
     moonlight-qt
     mpv
     mpv-mpris
@@ -214,12 +220,15 @@ package_omarchy-oncachy-desktop() {
     noto-fonts-emoji
     nss-mdns
     nvim
-    obs-studio
     obsidian
     omacalc
     omacut
+    omarchy-hyprland-titlebars
     omarchy-nvim
+    omarchy-power-profiles-daemon
+    omasnap
     omawrite
+    owe
     pacman-contrib
     pamixer
     pinta
@@ -228,24 +237,28 @@ package_omarchy-oncachy-desktop() {
     pipewire-pulse
     plocate
     postgresql-libs
-    power-profiles-daemon
     python-gobject
     python-poetry-core
     qemu-user-static-binfmt
     qrencode
+    qt6-base
+    qt6-declarative
     qt6-imageformats
+    qt6-multimedia
+    qt6-svg
     qt6-wayland
     quickshell
     ripgrep
     ruby
     sddm
+    signed
     slurp
     socat
     starship
+    superwhisper-bin
     sushi
     system-config-printer
     tealdeer
-    tensaku
     tesseract
     tesseract-data-eng
     tmux
@@ -261,6 +274,7 @@ package_omarchy-oncachy-desktop() {
     unzip
     usage
     uwsm
+    vi
     whois
     wireless-regdb
     wireplumber
@@ -270,7 +284,7 @@ package_omarchy-oncachy-desktop() {
     xdg-desktop-portal-gtk
     xdg-desktop-portal-hyprland
     xdg-terminal-exec
-    xournalpp
+    xorg-xsetroot
     yaru-icon-theme
     yay
     yt-dlp

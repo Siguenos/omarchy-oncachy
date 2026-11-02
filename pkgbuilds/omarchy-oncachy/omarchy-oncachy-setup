@@ -109,6 +109,8 @@ user_setup() {
     cp "$OMARCHY_PATH/logo.txt" "$HOME/.config/omarchy/branding/screensaver.txt"
   [[ -e $HOME/.local/state/tensaku/state.toml ]] ||
     cp "$OMARCHY_PATH/default/tensaku/state.toml" "$HOME/.local/state/tensaku/"
+  # CachyOS's welcome app opens at each login; it stays available from the menu.
+  rm -f "$HOME/.config/autostart/cachyos-hello.desktop"
 
   # fcitx5 keeps its own layout list, which otherwise starts as US.
   read -r layout variant <<< "$(keyboard_layout)"

@@ -96,6 +96,7 @@ class SetupTests(unittest.TestCase):
                'OMARCHY_ONCACHY_VCONSOLE': str(Path(tmp) / 'vconsole.conf'),
                'OMARCHY_ONCACHY_X11_KEYBOARD': str(Path(tmp) / '00-keyboard.conf'),
                'OMARCHY_ONCACHY_SDDM_STATE': str(Path(tmp) / 'sddm/state.conf'),
+               'OMARCHY_ONCACHY_SDDM_THEME_CONF': str(Path(tmp) / 'sddm.conf.d/10-omarchy-theme.conf'),
                'OMARCHY_ONCACHY_NO_SYSTEMCTL': '1'}
         return run('bash', '-c', 'source "$1"; ' + script, 'bash', str(SETUP), env=env)
 
@@ -129,6 +130,8 @@ class SetupTests(unittest.TestCase):
             self.assertEqual((Path(tmp) / 'vconsole.conf').read_text(), 'KEYMAP=fr-latin9\nXKBLAYOUT=fr\n')
             self.assertEqual(state.read_text(),
                              '[Last]\nSession=/usr/share/wayland-sessions/omarchy.desktop\nUser=alex\n')
+            self.assertEqual((Path(tmp) / 'sddm.conf.d/10-omarchy-theme.conf').read_text(),
+                             '[Theme]\nCurrent=omarchy\n')
 
     def test_system_setup_keeps_chosen_session(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -251,6 +254,8 @@ class UpstreamTests(unittest.TestCase):
             self.assertTrue((payload / 'usr/share/omarchy/application-icons/hicolor').is_dir())
             self.assertFalse((payload / 'usr/share/icons/hicolor').exists())
             self.assertTrue((payload / 'usr/share/wayland-sessions/omarchy.desktop').is_file())
+            for asset in ('Main.qml', 'metadata.desktop', 'logo.png'):
+                self.assertTrue((payload / 'usr/share/sddm/themes/omarchy' / asset).is_file(), asset)
             for path in ('etc/fastfetch/config.jsonc', 'etc/xdg/kitty/kitty.conf', 'usr/share/pixmaps/omarchy.png',
                          'usr/share/omarchy/default/bashrc', 'usr/share/omarchy/logo.txt'):
                 self.assertTrue((payload / path).is_file(), path)

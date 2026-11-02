@@ -75,6 +75,9 @@ package_omarchy-oncachy() {
   done
   # Use the existing SDDM configuration, adding a selectable session only.
   install -Dm644 default/wayland-sessions/omarchy.desktop "$pkgdir/usr/share/wayland-sessions/omarchy.desktop"
+  # Omarchy's login theme; omarchy-oncachy-setup selects it in /etc/sddm.conf.d.
+  install -d "$pkgdir/usr/share/sddm/themes/omarchy"
+  install -m644 default/sddm/omarchy/* "$pkgdir/usr/share/sddm/themes/omarchy/"
   install -Dm644 default/fonts/omarchy/omarchy.ttf "$pkgdir/usr/share/fonts/omarchy/omarchy.ttf"
   # Defaults Omarchy's settings package puts in /etc; no CachyOS package owns them.
   install -Dm644 etc/fastfetch/config.jsonc "$pkgdir/etc/fastfetch/config.jsonc"

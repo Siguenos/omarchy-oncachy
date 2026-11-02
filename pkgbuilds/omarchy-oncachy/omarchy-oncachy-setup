@@ -14,6 +14,7 @@ OMARCHY_PATH=/usr/share/omarchy
 VCONSOLE=${OMARCHY_ONCACHY_VCONSOLE:-/etc/vconsole.conf}
 X11_KEYBOARD=${OMARCHY_ONCACHY_X11_KEYBOARD:-/etc/X11/xorg.conf.d/00-keyboard.conf}
 SDDM_STATE=${OMARCHY_ONCACHY_SDDM_STATE:-/var/lib/sddm/state.conf}
+SDDM_THEME_CONF=${OMARCHY_ONCACHY_SDDM_THEME_CONF:-/etc/sddm.conf.d/10-omarchy-theme.conf}
 SESSION=/usr/share/wayland-sessions/omarchy.desktop
 
 usage() { sed -n '2,10s/^# \{0,1\}//p' "$0"; }
@@ -60,6 +61,14 @@ system_setup() {
       printf '[Last]\nSession=%s\n' "$SESSION" >> "$SDDM_STATE"
     fi
     (( EUID != 0 )) || ! id sddm >/dev/null 2>&1 || chown sddm:sddm "$SDDM_STATE"
+  fi
+
+  # Omarchy's login theme, shipped in /usr/share/sddm/themes/omarchy. Kept if
+  # this file was edited to pick another theme.
+  if [[ ! -e $SDDM_THEME_CONF ]]; then
+    echo "SDDM: Omarchy theme"
+    mkdir -p "$(dirname -- "$SDDM_THEME_CONF")"
+    printf '[Theme]\nCurrent=omarchy\n' > "$SDDM_THEME_CONF"
   fi
 
   if [[ -z ${OMARCHY_ONCACHY_NO_SYSTEMCTL:-} ]]; then

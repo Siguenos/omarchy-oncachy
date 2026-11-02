@@ -3,15 +3,20 @@
 # root, add Omarchy to Calamares (iso/customize.sh), repack it and write a new
 # ISO that keeps the original boot setup.
 # Runs as root, with squashfs-tools, xorriso and gnupg.
-# Usage: iso/remaster.sh [--extras] CACHYOS_ISO OUTPUT_ISO
-#   --extras   also install extras.packages (AUR included) with Omarchy
+# Usage: iso/remaster.sh [--extras AUR_DIR] CACHYOS_ISO OUTPUT_ISO
+#   --extras AUR_DIR   also install extras/extras.packages with Omarchy, the AUR
+#                      ones from AUR_DIR (omarchy-oncachy-extras --build AUR_DIR)
 set -eEuo pipefail
 ISO_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 SFS=/arch/x86_64/airootfs.sfs
 
-usage() { sed -n '2,7s/^# \{0,1\}//p' "$0"; }
+usage() { sed -n '2,8s/^# \{0,1\}//p' "$0"; }
 customize_args=()
-[[ ${1:-} != --extras ]] || { customize_args=(--extras); shift; }
+if [[ ${1:-} == --extras ]]; then
+  [[ -n ${2:-} ]] || { usage >&2; exit 2; }
+  customize_args=(--extras "$(realpath -- "$2")")
+  shift 2
+fi
 (( $# == 2 )) || { usage >&2; exit 2; }
 input=$(realpath -- "$1") output=$(realpath -- "$2")
 (( EUID == 0 )) || { echo "Run as root (unsquashfs must keep file owners)." >&2; exit 1; }

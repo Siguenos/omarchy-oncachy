@@ -53,7 +53,7 @@ class ScriptTests(unittest.TestCase):
 
     def test_extras_list(self):
         result = run('bash', '-c', 'source "$1"; list_packages "$2"', 'bash', str(EXTRAS),
-                     str(EXTRAS.with_name('extras.packages')))
+                     str(ROOT / 'extras/extras.packages'))
         self.assertEqual(result.returncode, 0, result.stderr)
         packages = result.stdout.split()
         self.assertIn('jetbrains-toolbox', packages)
@@ -170,8 +170,11 @@ class IsoTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / 'airootfs'
             key = self.make_live_root(root)
+            aur = Path(tmp) / 'aur'
+            aur.mkdir()
+            (aur / 'gitkraken-1-1-x86_64.pkg.tar.zst').write_text('package\n')
             for _ in range(2):
-                result = run(str(ROOT / 'iso/customize.sh'), '--extras', str(root), str(key))
+                result = run(str(ROOT / 'iso/customize.sh'), '--extras', str(aur), str(root), str(key))
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             modules = root / 'etc/calamares/modules'
             chooser = (modules / 'packagechooser_desktop.conf').read_text()
@@ -183,7 +186,10 @@ class IsoTests(unittest.TestCase):
             self.assertEqual(sequence[sequence.index('packages@online') - 2], 'shellprocess@omarchy_repos')
             self.assertEqual(sequence[sequence.index('shellprocess') + 2], 'shellprocess@omarchy_finish')
             data = root / 'etc/calamares/omarchy-oncachy'
-            self.assertTrue((data / 'extras').exists())
+            extras = data / 'extras'
+            self.assertTrue((extras / 'aur/gitkraken-1-1-x86_64.pkg.tar.zst').is_file())
+            self.assertIn('jetbrains-toolbox', (extras / 'extras.packages').read_text())
+            self.assertTrue((extras / 'omarchy-oncachy-extras').stat().st_mode & 0o111)
             self.assertIn('ONCACHY_SERVER=', (data / 'repos.sh').read_text())
             kit = root / 'usr/lib/omarchy-oncachy-iso'
             self.assertTrue((kit / 'iso/customize.sh').stat().st_mode & 0o111)
@@ -191,8 +197,9 @@ class IsoTests(unittest.TestCase):
             self.assertIn('Target = cachyos-calamares*', hook)
             # The live system runs the kit again after the installer package is upgraded.
             (modules / 'packagechooser_desktop.conf').write_text('items:\n    - id: KDE-Desktop\n')
-            result = run('bash', str(kit / 'iso/customize.sh'), '--extras', str(root), str(kit / 'omarchy.asc'))
+            result = run('bash', str(kit / 'iso/customize.sh'), str(root), str(kit / 'omarchy.asc'))
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((extras / 'extras.packages').is_file())
             self.assertIn('- id: Omarchy', (modules / 'packagechooser_desktop.conf').read_text())
 
 
@@ -222,7 +229,7 @@ class UpstreamTests(unittest.TestCase):
             directory = Path(tmp)
             (directory / 'src').mkdir()
             (directory / 'src/omarchy').symlink_to(Path(SOURCE).resolve(), target_is_directory=True)
-            for local in (SETUP, EXTRAS, EXTRAS.with_name('extras.packages')):
+            for local in (SETUP, EXTRAS):
                 (directory / 'src' / local.name).symlink_to(local)
             (directory / 'tools').mkdir()
             mock = directory / 'tools/magick'
@@ -247,7 +254,6 @@ class UpstreamTests(unittest.TestCase):
             for path in ('etc/fastfetch/config.jsonc', 'etc/xdg/kitty/kitty.conf', 'usr/share/pixmaps/omarchy.png',
                          'usr/share/omarchy/default/bashrc', 'usr/share/omarchy/logo.txt'):
                 self.assertTrue((payload / path).is_file(), path)
-            self.assertTrue((payload / 'usr/share/omarchy-oncachy/extras.packages').is_file())
             for command in ('omarchy-update', 'omarchy-oncachy-setup', 'omarchy-oncachy-extras'):
                 self.assertTrue((payload / 'usr/bin' / command).stat().st_mode & 0o111, command)
             for forbidden in ('boot', 'etc/mkinitcpio.conf.d', 'etc/limine-entry-tool.d',

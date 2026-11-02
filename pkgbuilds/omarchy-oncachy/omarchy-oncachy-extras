@@ -1,84 +1,129 @@
 #!/usr/bin/env bash
-# Install the optional applications listed in extras.packages: repository
-# packages with pacman, the others from the AUR with yay, one at a time so a
-# failing AUR build does not stop the rest.
+# Install the applications of an extras list, skipping the ones that fail:
+# repository packages with pacman, the others built from the AUR with makepkg.
 #
-#   omarchy-oncachy-extras [--yes] [LIST]    as the user
-#   omarchy-oncachy-extras --for USER [LIST] as root (ISO installer chroot): runs
-#                                            as USER, unattended, with passwordless
-#                                            sudo while it runs
+#   omarchy-oncachy-extras [--yes] [LIST]      as the user: install what is missing
+#   omarchy-oncachy-extras --build DIR [LIST]  as the user: only build the AUR
+#                                              packages into DIR (ISO build)
+#   omarchy-oncachy-extras --prebuilt DIR [LIST]
+#                                              as root: AUR packages from DIR (ISO install)
+#
+# LIST is a file or an http(s) URL, by default the list on the project's main
+# branch, so new entries pushed there are picked up without a package update.
 set -eEuo pipefail
 
-LIST=/usr/share/omarchy-oncachy/extras.packages
-SUDOERS=/etc/sudoers.d/90-omarchy-oncachy-extras
+LIST_URL=https://raw.githubusercontent.com/Siguenos/omarchy-oncachy/main/extras/extras.packages
+AUR_URL=https://aur.archlinux.org
 
-usage() { sed -n '2,9s/^# \{0,1\}//p' "$0"; }
+usage() { sed -n '2,13s/^# \{0,1\}//p' "$0"; }
 
 # Print the package names of a list: one per line, '#' starts a comment.
 list_packages() { sed 's/#.*//; s/[[:space:]]//g; /^$/d' "$1"; }
 
-install_extras() {
-  local yes=$1 list=$2 package
-  local -a packages repo=() aur=() failed=() confirm=() yay_args=()
-  mapfile -t packages < <(list_packages "$list")
-  local available
-  available=$(pacman -Slq)
-  for package in "${packages[@]}"; do
-    if grep -qxF "$package" <<< "$available"; then repo+=("$package"); else aur+=("$package"); fi
-  done
-  if (( yes )); then
-    confirm=(--noconfirm)
-    yay_args=(--answerclean None --answerdiff None --answeredit None)
-  fi
+as_root() { if (( EUID == 0 )); then "$@"; else sudo "$@"; fi; }
 
-  if (( ${#repo[@]} )); then
-    echo "Repository packages: ${repo[*]}"
-    sudo pacman -S --needed "${confirm[@]}" "${repo[@]}"
-  fi
-  for package in "${aur[@]}"; do
-    echo "AUR package: $package"
-    yay -S --aur --needed --sudoloop --removemake "${confirm[@]}" "${yay_args[@]}" "$package" ||
-      failed+=("$package")
+# pacman -S names or -U files in one transaction, or one at a time when it
+# fails; adds what could not be installed to the failed array.
+pacman_each() {
+  local operation=$1 target
+  shift
+  as_root pacman "$operation" --needed "${confirm[@]}" "$@" && return 0
+  for target in "$@"; do
+    as_root pacman "$operation" --needed "${confirm[@]}" "$target" || failed+=("${target##*/}")
   done
-  if (( ${#failed[@]} )); then
-    echo "Could not install from the AUR: ${failed[*]}. Retry with: yay -S ${failed[*]}" >&2
-    return 1
-  fi
-  echo "Extras installed."
+}
+
+# Build an AUR package into DIR with makepkg (repository dependencies only),
+# trying twice: downloads during builds fail now and then.
+build_aur() {
+  build_aur_once "$@" || build_aur_once "$@"
+}
+
+build_aur_once() {
+  local name=$1 out=$2 dir=$work/aur/$1 key
+  rm -rf "$dir"
+  git clone -q --depth 1 "$AUR_URL/$name.git" "$dir" && [[ -f $dir/PKGBUILD ]] || return 1
+  # makepkg checks signed sources against the keys the PKGBUILD trusts.
+  for key in $(sed -n 's/^[[:space:]]*validpgpkeys = //p' "$dir/.SRCINFO"); do
+    gpg --batch --quiet --recv-keys "$key" >/dev/null 2>&1 || true
+  done
+  (cd "$dir" && PKGDEST=$out makepkg --syncdeps --rmdeps --noconfirm)
 }
 
 [[ ${BASH_SOURCE[0]} == "$0" ]] || return 0
 
-yes=0 for_user=''
+mode=install yes=0 dir='' list=$LIST_URL
 while (( $# )); do
   case $1 in
     --yes) yes=1 ;;
-    --for) [[ -n ${2:-} ]] || { usage >&2; exit 2; }; for_user=$2; shift ;;
+    --build|--prebuilt)
+      [[ -n ${2:-} ]] || { usage >&2; exit 2; }
+      mode=${1#--} dir=$(realpath -m -- "$2"); shift ;;
     -h|--help) usage; exit 0 ;;
     -*) usage >&2; exit 2 ;;
-    *) LIST=$1 ;;
+    *) list=$1 ;;
   esac
   shift
 done
-[[ -r $LIST ]] || { echo "Cannot read $LIST" >&2; exit 1; }
-
-if [[ -n $for_user ]]; then
-  (( EUID == 0 )) || { echo "--for must run as root." >&2; exit 1; }
-  home=$(getent passwd "$for_user" | cut -d: -f6)
-  [[ -n $home ]] || { echo "Unknown user: $for_user" >&2; exit 1; }
-  list=$(realpath -- "$LIST")
-  # yay refuses to build as root; the user needs sudo without a password prompt.
-  # !authenticate also covers yay's `sudo -v`, which asks for a password unless
-  # every rule for the user (e.g. %wheel's) is NOPASSWD.
-  trap 'rm -f "$SUDOERS"' EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  install -m 440 /dev/null "$SUDOERS"
-  printf 'Defaults:%s !authenticate\n%s ALL=(ALL) NOPASSWD: ALL\n' "$for_user" "$for_user" > "$SUDOERS"
-  visudo -cqf "$SUDOERS"
-  runuser -u "$for_user" -- env HOME="$home" USER="$for_user" LOGNAME="$for_user" \
-    PATH=/usr/local/bin:/usr/bin bash "$0" --yes "$list"
+if [[ $mode == prebuilt ]]; then
+  (( EUID == 0 )) || { echo "--prebuilt must run as root." >&2; exit 1; }
+  yes=1
 else
-  (( EUID != 0 )) || { echo "Run as your normal user (or use --for USER as root)." >&2; exit 1; }
-  install_extras "$yes" "$LIST"
+  (( EUID != 0 )) || { echo "Run as your normal user (makepkg does not build as root)." >&2; exit 1; }
+fi
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+if [[ $list == http://* || $list == https://* ]]; then
+  curl -fsSL -o "$work/list" "$list" || { echo "Cannot download $list" >&2; exit 1; }
+else
+  cp -- "$list" "$work/list"
+fi
+mapfile -t packages < <(list_packages "$work/list")
+available=$(pacman -Slq)
+repo=() aur=() failed=() confirm=()
+for package in "${packages[@]}"; do
+  if grep -qxF "$package" <<< "$available"; then repo+=("$package"); else aur+=("$package"); fi
+done
+(( !yes )) || confirm=(--noconfirm)
+
+case $mode in
+  build)
+    mkdir -p "$dir"
+    for package in "${aur[@]}"; do
+      echo "== Building $package"
+      build_aur "$package" "$dir" || failed+=("$package")
+    done
+    ;;
+  install)
+    (( ! ${#repo[@]} )) || pacman_each -S "${repo[@]}"
+    for package in "${aur[@]}"; do
+      if pacman -Q "$package" >/dev/null 2>&1; then continue; fi
+      echo "== Building $package"
+      rm -rf "$work/out"
+      if build_aur "$package" "$work/out"; then
+        pacman_each -U "$work/out"/*.pkg.tar.*
+      else
+        failed+=("$package")
+      fi
+    done
+    ;;
+  prebuilt)
+    (( ! ${#repo[@]} )) || pacman_each -S "${repo[@]}"
+    files=()
+    for package in "${aur[@]}"; do
+      file=''
+      for candidate in "$dir/$package"-*.pkg.tar.*; do
+        if [[ -f $candidate && $(pacman -Qqp "$candidate") == "$package" ]]; then file=$candidate; fi
+      done
+      if [[ -n $file ]]; then files+=("$file"); else failed+=("$package (not built)"); fi
+    done
+    (( ! ${#files[@]} )) || pacman_each -U "${files[@]}"
+    ;;
+esac
+
+if (( ${#failed[@]} )); then
+  echo "Skipped, could not be installed or built: ${failed[*]}"
+else
+  echo "Extras done."
 fi

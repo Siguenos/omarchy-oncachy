@@ -1,6 +1,7 @@
-# Optional applications installed by omarchy-oncachy-extras (install.sh --extras,
-# or the ISO's Omarchy choice). Repository packages go through pacman, the others
-# are built from the AUR with yay. Packages Omarchy already installs are skipped.
+# Applications installed by omarchy-oncachy-extras on top of Omarchy: repository
+# packages with pacman, the others built from the AUR. Running the command on an
+# installed system downloads this list from the main branch; ISOs built with
+# --extras embed it, with the AUR packages built beforehand.
 
 # Development
 jetbrains-toolbox

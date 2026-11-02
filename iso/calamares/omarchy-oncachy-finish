@@ -36,7 +36,12 @@ fi
 # Omarchy's shell configuration is for bash (CachyOS's installer picks fish).
 target chsh -s /bin/bash "$user"
 target omarchy-oncachy-setup --system "$user"
-if [[ -e $dir/extras ]]; then
-  target omarchy-oncachy-extras --for "$user" ||
-    echo "Some extras failed; run omarchy-oncachy-extras after the first login to retry."
+# Extras embedded at build time: repository packages from the mirrors, AUR
+# packages built beforehand. Failures are skipped and listed in the log.
+if [[ -d $dir/extras ]]; then
+  extras=/var/tmp/omarchy-oncachy-extras
+  cp -r "$dir/extras" "$root$extras"
+  target bash "$extras/omarchy-oncachy-extras" --prebuilt "$extras/aur" "$extras/extras.packages" ||
+    echo "Extras failed; run omarchy-oncachy-extras after the first login."
+  rm -rf "${root:?}$extras"
 fi

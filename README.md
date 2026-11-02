@@ -41,21 +41,32 @@ Reboot and log in to the Omarchy session. Updates come with `sudo pacman -Syu` (
 
 ### Extra applications
 
-`./install.sh --extras` (or `omarchy-oncachy-extras` later) also installs the applications listed in
-[`extras.packages`](pkgbuilds/omarchy-oncachy/extras.packages): repository packages with pacman,
-AUR packages with yay, one at a time so a failing AUR build does not stop the others.
+[`extras/extras.packages`](extras/extras.packages) lists applications to add on top of Omarchy.
+`omarchy-oncachy-extras` installs the ones that are missing: repository packages with pacman,
+the others built from the AUR with makepkg. Failures are skipped and listed at the end.
+
+```bash
+omarchy-oncachy-extras            # the list on this repository's main branch
+omarchy-oncachy-extras FILE|URL   # another list
+./install.sh --extras             # during the first install, with the clone's list
+```
+
+The list is downloaded each time, so adding an application is a push to `main`, then
+`omarchy-oncachy-extras` on each machine: no package release needed.
 
 ## Installer ISO
 
 `iso/` turns the official CachyOS desktop ISO into one whose Calamares installer offers Omarchy
 next to the other desktops. Choosing it installs `omarchy-oncachy-desktop`, puts `[omarchy]` ahead of
 the CachyOS repositories, sets the user up with `omarchy-oncachy-setup` (bash as login shell) and,
-for ISOs built with `--extras`, installs the extra applications. Partitioning, encryption,
+for ISOs built with `--extras`, installs the extra applications (AUR packages built with the ISO,
+failures skipped and listed). Partitioning, encryption,
 bootloader and drivers stay CachyOS's.
 
 ```bash
 # As root on CachyOS/Arch (squashfs-tools, xorriso, gnupg):
-sudo iso/remaster.sh [--extras] cachyos-desktop-linux-YYMMDD.iso omarchy-oncachy-YYYY.MM.DD-x86_64.iso
+omarchy-oncachy-extras --build aur extras/extras.packages   # optional: AUR packages, as a user
+sudo iso/remaster.sh [--extras aur] cachyos-desktop-linux-YYMMDD.iso omarchy-oncachy-YYYY.MM.DD-x86_64.iso
 # Or from a machine without root, on a CachyOS VM reachable over SSH with sudo
 # (downloads and checks the latest CachyOS ISO unless --iso is given):
 iso/build-in-vm.sh [--extras] [--iso FILE] [--ssh-config FILE] HOST OUTPUT_DIR

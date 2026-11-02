@@ -2,7 +2,7 @@
 # Install the Omarchy desktop on an existing CachyOS system.
 # Usage: ./install.sh [--yes] [--extras] [--packages DIR]
 #   --yes            no questions; pacman picks its default providers
-#   --extras         also install the applications of extras.packages (AUR included)
+#   --extras         also install the applications of extras/extras.packages (AUR included)
 #   --packages DIR   install packages built with bin/build.sh (e.g. out/)
 #                    instead of the [omarchy-oncachy] repository
 set -eEuo pipefail
@@ -88,6 +88,6 @@ omarchy-oncachy-setup
 if (( extras )); then
   extras_args=()
   (( !yes )) || extras_args=(--yes)
-  omarchy-oncachy-extras "${extras_args[@]}"
+  omarchy-oncachy-extras "${extras_args[@]}" "$ROOT/extras/extras.packages"
 fi
 echo "Done. Log: $log"

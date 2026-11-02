@@ -16,10 +16,8 @@ options=(!debug)
 # Local files live in this repository, so they are not checksummed.
 source=("omarchy::git+https://github.com/omacom/omarchy.git#commit=$_commit"
         omarchy-oncachy-setup
-        omarchy-oncachy-extras
-        extras.packages)
+        omarchy-oncachy-extras)
 sha256sums=('f89ae5e85d18d8364f5c89ae05cd0fd170a8c4c93dd62e396b2b0a7fa5be4428'
-            'SKIP'
             'SKIP'
             'SKIP')
 
@@ -126,7 +124,6 @@ UPGRADE
 
   install -Dm755 "$srcdir/omarchy-oncachy-setup" "$pkgdir/usr/bin/omarchy-oncachy-setup"
   install -Dm755 "$srcdir/omarchy-oncachy-extras" "$pkgdir/usr/bin/omarchy-oncachy-extras"
-  install -Dm644 "$srcdir/extras.packages" "$pkgdir/usr/share/omarchy-oncachy/extras.packages"
 }
 
 package_omarchy-oncachy-desktop() {

@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 # Build the installer ISO on another CachyOS or Arch machine (e.g. a VM)
 # reachable over SSH with sudo, for hosts where root is not available.
-# Downloads the latest CachyOS desktop ISO unless one is given.
+# Downloads the latest CachyOS desktop ISO unless one is given. With --extras,
+# the AUR packages of extras/extras.packages are built there first; the ones
+# that fail are skipped and listed.
 # Usage: iso/build-in-vm.sh [--extras] [--iso CACHYOS_ISO] [--ssh-config FILE] HOST OUTPUT_DIR
 set -eEuo pipefail
 ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 ISO_BASE=https://cdn77.cachyos.org/ISO/desktop
 
-usage() { sed -n '2,5s/^# \{0,1\}//p' "$0"; }
-remaster_args=() iso='' ssh_args=()
+usage() { sed -n '2,7s/^# \{0,1\}//p' "$0"; }
+extras=0 iso='' ssh_args=()
 while (( $# )); do
   case $1 in
-    --extras) remaster_args+=(--extras) ;;
+    --extras) extras=1 ;;
     --iso) [[ -n ${2:-} ]] || { usage >&2; exit 2; }; iso=$2; shift ;;
     --ssh-config) [[ -n ${2:-} ]] || { usage >&2; exit 2; }; ssh_args=(-F "$2"); shift ;;
     -h|--help) usage; exit 0 ;;
@@ -45,11 +47,18 @@ EOF
 git -C "$ROOT_DIR" ls-files -z --cached --others --exclude-standard |
   tar -C "$ROOT_DIR" --null -T - -cf - | ssh "${ssh_args[@]}" "$host" tar -C omarchy-oncachy-iso/src -xf -
 scp "${ssh_args[@]}" -q "$iso" "$host:omarchy-oncachy-iso/cachyos.iso"
-remote "$name" "${remaster_args[@]}" <<'EOF'
+remote "$name" "$extras" <<'EOF'
 set -e
-name=$1; shift
+name=$1 extras=$2
 cd ~/omarchy-oncachy-iso
-sudo src/iso/remaster.sh "$@" cachyos.iso "$name"
+args=()
+if (( extras )); then
+  sudo pacman -S --needed --noconfirm base-devel git >/dev/null
+  bash src/pkgbuilds/omarchy-oncachy/omarchy-oncachy-extras --build aur src/extras/extras.packages 2>&1 |
+    tee build-aur.log | grep -E '^(== Building|Skipped|Extras done)'
+  args=(--extras aur)
+fi
+sudo src/iso/remaster.sh "${args[@]}" cachyos.iso "$name"
 EOF
 scp "${ssh_args[@]}" -q "$host:omarchy-oncachy-iso/$name" "$host:omarchy-oncachy-iso/$name.sha256" "$out_dir/"
 remote <<'EOF'

@@ -2,8 +2,9 @@
 # Add Omarchy to the Calamares installer of an unpacked CachyOS live root:
 # desktop choice, netinstall group, repositories and keys for the target, and
 # the jobs that set it up. Safe to run again on a customized root.
-# Usage: iso/customize.sh [--extras] AIROOTFS OMARCHY_KEY_FILE
-#   --extras   also install extras.packages (AUR included) with Omarchy
+# Usage: iso/customize.sh [--extras AUR_DIR] AIROOTFS OMARCHY_KEY_FILE
+#   --extras AUR_DIR   also install extras/extras.packages with Omarchy, the AUR
+#                      ones from AUR_DIR (omarchy-oncachy-extras --build)
 #
 # CachyOS Hello upgrades the installer package before starting it, which
 # restores its configuration: the live root gets a copy of this kit under KIT
@@ -14,9 +15,13 @@ ROOT_DIR=$(dirname -- "$ISO_DIR")
 KIT=/usr/lib/omarchy-oncachy-iso
 HOOK=/etc/pacman.d/hooks/90-omarchy-oncachy-calamares.hook
 
-usage() { sed -n '2,6s/^# \{0,1\}//p' "$0"; }
-extras=0
-[[ ${1:-} != --extras ]] || { extras=1; shift; }
+usage() { sed -n '2,7s/^# \{0,1\}//p' "$0"; }
+aur_dir=''
+if [[ ${1:-} == --extras ]]; then
+  [[ -n ${2:-} ]] || { usage >&2; exit 2; }
+  aur_dir=$(realpath -- "$2")
+  shift 2
+fi
 (( $# == 2 )) || { usage >&2; exit 2; }
 airootfs=$(realpath -- "$1") omarchy_key=$(realpath -- "$2")
 calamares=$airootfs/etc/calamares
@@ -41,8 +46,6 @@ if [[ $(realpath -m -- "$airootfs$KIT") != "$ROOT_DIR" ]]; then
   install -m 644 "$ROOT_DIR/keys/omarchy-oncachy.asc" "$airootfs$KIT/keys/"
   install -m 644 "$ROOT_DIR/install.sh" "$airootfs$KIT/"
   install -m 644 "$omarchy_key" "$airootfs$KIT/omarchy.asc"
-  args=()
-  (( !extras )) || args=(--extras)
   install -d "$airootfs${HOOK%/*}"
   cat > "$airootfs$HOOK" <<HOOK
 [Trigger]
@@ -54,7 +57,7 @@ Target = cachyos-calamares*
 [Action]
 Description = Adding Omarchy to the installer...
 When = PostTransaction
-Exec = $KIT/iso/customize.sh ${args[*]} / $KIT/omarchy.asc
+Exec = $KIT/iso/customize.sh / $KIT/omarchy.asc
 HOOK
 fi
 
@@ -67,8 +70,14 @@ install -m 644 "$ROOT_DIR/bin/pacman-config.awk" "$data/pacman-config.awk"
 # Same repositories and keys as install.sh.
 grep -E '^(OMARCHY|ONCACHY)_(SERVER|KEY)=' "$ROOT_DIR/install.sh" > "$data/repos.sh"
 (( $(wc -l < "$data/repos.sh") == 4 )) || { echo "Repository settings not found in install.sh" >&2; exit 1; }
-rm -f "$data/extras"
-(( !extras )) || : > "$data/extras"
+# The extras stay from the first run when the hook runs this again.
+if [[ -n $aur_dir ]]; then
+  rm -rf "$data/extras"
+  install -d "$data/extras/aur"
+  install -m 644 "$ROOT_DIR/extras/extras.packages" "$data/extras/extras.packages"
+  install -m 755 "$ROOT_DIR/pkgbuilds/omarchy-oncachy/omarchy-oncachy-extras" "$data/extras/omarchy-oncachy-extras"
+  find "$aur_dir" -maxdepth 1 -name '*.pkg.tar.*' -exec install -m 644 -t "$data/extras/aur" {} +
+fi
 for script in omarchy-oncachy-repos omarchy-oncachy-finish; do
   install -m 755 "$ISO_DIR/calamares/$script" "$calamares/scripts/$script"
 done
@@ -114,4 +123,4 @@ for settings in "$airootfs"/usr/share/calamares/settings{,_online}.conf "$calama
     END { if (changes != 3) exit 1 }'
   echo "Updated ${settings#"$airootfs"}"
 done
-echo "Omarchy added to the installer (extras: $( (( extras )) && echo yes || echo no))."
+echo "Omarchy added to the installer (extras: $([[ -d $data/extras ]] && echo yes || echo no))."

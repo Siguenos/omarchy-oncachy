@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Install the Omarchy desktop on an existing CachyOS system.
-# Usage: ./install.sh [--yes] [--packages DIR]
+# Usage: ./install.sh [--yes] [--extras] [--packages DIR]
 #   --yes            no questions; pacman picks its default providers
+#   --extras         also install the applications of extras.packages (AUR included)
 #   --packages DIR   install packages built with bin/build.sh (e.g. out/)
 #                    instead of the [omarchy-oncachy] repository
 set -eEuo pipefail
@@ -14,11 +15,12 @@ OMARCHY_KEY=40DFB630FF42BCFFB047046CF0134EE680CAC571
 ONCACHY_SERVER='https://github.com/Siguenos/omarchy-oncachy/releases/download/repo'
 ONCACHY_KEY=F5CC831F86EEDEF2988D958F9C2D1A8DCDB97DAB
 
-usage() { sed -n '2,6s/^# \{0,1\}//p' "$0"; }
-yes=0 packages=''
+usage() { sed -n '2,7s/^# \{0,1\}//p' "$0"; }
+yes=0 extras=0 packages=''
 while (( $# )); do
   case $1 in
     --yes) yes=1 ;;
+    --extras) extras=1 ;;
     --packages) [[ -n ${2:-} ]] || { usage >&2; exit 2; }; packages=$(cd -- "$2" && pwd); shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
@@ -83,4 +85,9 @@ else
   sudo pacman -S --needed "${confirm[@]}" omarchy-oncachy-desktop
 fi
 omarchy-oncachy-setup
+if (( extras )); then
+  extras_args=()
+  (( !yes )) || extras_args=(--yes)
+  omarchy-oncachy-extras "${extras_args[@]}"
+fi
 echo "Done. Log: $log"

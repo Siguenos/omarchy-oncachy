@@ -7,6 +7,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 PKGBUILD = ROOT / 'pkgbuilds/omarchy-oncachy/PKGBUILD'
 SETUP = ROOT / 'pkgbuilds/omarchy-oncachy/omarchy-oncachy-setup'
+EXTRAS = ROOT / 'pkgbuilds/omarchy-oncachy/omarchy-oncachy-extras'
 # Upstream checkout at the pinned commit, e.g. .cache/build/omarchy-oncachy/src/omarchy
 # after `bin/build.sh --nobuild`.
 SOURCE = os.environ.get('OMARCHY_TEST_SOURCE')
@@ -24,7 +25,8 @@ def pkgbuild_value(expression):
 
 class ScriptTests(unittest.TestCase):
     def test_bash_syntax(self):
-        for path in [*ROOT.glob('bin/*.sh'), PKGBUILD, SETUP]:
+        for path in [*ROOT.glob('bin/*.sh'), *ROOT.glob('iso/*.sh'), *ROOT.glob('iso/calamares/omarchy-oncachy-*'),
+                     ROOT / 'install.sh', PKGBUILD, SETUP, EXTRAS]:
             result = run('bash', '-n', str(path))
             self.assertEqual(result.returncode, 0, f'{path}: {result.stderr}')
 
@@ -48,6 +50,15 @@ class ScriptTests(unittest.TestCase):
         for (old, new), kind in cases.items():
             result = run(str(ROOT / 'bin/update-kind.sh'), old, new)
             self.assertEqual(result.stdout.strip(), kind, f'{old} -> {new}: {result.stderr}')
+
+    def test_extras_list(self):
+        result = run('bash', '-c', 'source "$1"; list_packages "$2"', 'bash', str(EXTRAS),
+                     str(EXTRAS.with_name('extras.packages')))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        packages = result.stdout.split()
+        self.assertIn('jetbrains-toolbox', packages)
+        self.assertEqual(len(packages), len(set(packages)))
+        self.assertTrue(all(p and '#' not in p and ' ' not in p for p in packages))
 
     def test_desktop_depends_filter(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -136,6 +147,55 @@ class SetupTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
 
 
+class IsoTests(unittest.TestCase):
+    def make_live_root(self, root):
+        modules = root / 'etc/calamares/modules'
+        for directory in (modules, root / 'etc/calamares/scripts', root / 'etc/calamares/images',
+                          root / 'usr/share/calamares'):
+            directory.mkdir(parents=True)
+        (modules / 'packagechooser_desktop.conf').write_text(
+            'items:\n    - id: ""\n      name: "No Desktop"\n\n    - id: KDE-Desktop\n      name: "Plasma"\n')
+        (modules / 'netinstall.yaml').write_text('- name: "KDE-Desktop"\n  packages:\n    - plasma\n')
+        (modules / 'netinstall.conf').write_text(
+            '---\ngroupsUrl:\n - https://example.org/netinstall.yaml\n - file:///etc/calamares/modules/netinstall.yaml\n'
+            'required: true\n')
+        (root / 'usr/share/calamares/settings_online.conf').write_text(
+            'instances:\n- id:       online\n  module:   packages\nsequence:\n- exec:\n  - pacstrap\n'
+            '  - packages@online\n  - users\n  - shellprocess\n  - umount\n')
+        key = root.parent / 'omarchy.asc'
+        key.write_text('key\n')
+        return key
+
+    def test_customize_is_repeatable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'airootfs'
+            key = self.make_live_root(root)
+            for _ in range(2):
+                result = run(str(ROOT / 'iso/customize.sh'), '--extras', str(root), str(key))
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            modules = root / 'etc/calamares/modules'
+            chooser = (modules / 'packagechooser_desktop.conf').read_text()
+            self.assertEqual(chooser.count('- id: Omarchy'), 1)
+            self.assertLess(chooser.index('- id: Omarchy'), chooser.index('- id: KDE-Desktop'))
+            self.assertEqual((modules / 'netinstall.yaml').read_text().count('- omarchy-oncachy-desktop'), 1)
+            self.assertNotIn('https://', (modules / 'netinstall.conf').read_text())
+            sequence = (root / 'usr/share/calamares/settings_online.conf').read_text().split('sequence:')[1].split()
+            self.assertEqual(sequence[sequence.index('packages@online') - 2], 'shellprocess@omarchy_repos')
+            self.assertEqual(sequence[sequence.index('shellprocess') + 2], 'shellprocess@omarchy_finish')
+            data = root / 'etc/calamares/omarchy-oncachy'
+            self.assertTrue((data / 'extras').exists())
+            self.assertIn('ONCACHY_SERVER=', (data / 'repos.sh').read_text())
+            kit = root / 'usr/lib/omarchy-oncachy-iso'
+            self.assertTrue((kit / 'iso/customize.sh').stat().st_mode & 0o111)
+            hook = (root / 'etc/pacman.d/hooks/90-omarchy-oncachy-calamares.hook').read_text()
+            self.assertIn('Target = cachyos-calamares*', hook)
+            # The live system runs the kit again after the installer package is upgraded.
+            (modules / 'packagechooser_desktop.conf').write_text('items:\n    - id: KDE-Desktop\n')
+            result = run('bash', str(kit / 'iso/customize.sh'), '--extras', str(root), str(kit / 'omarchy.asc'))
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('- id: Omarchy', (modules / 'packagechooser_desktop.conf').read_text())
+
+
 @unittest.skipUnless(SOURCE, 'Set OMARCHY_TEST_SOURCE to the upstream checkout at the pinned commit')
 class UpstreamTests(unittest.TestCase):
     def test_source_is_the_pinned_commit(self):
@@ -162,7 +222,8 @@ class UpstreamTests(unittest.TestCase):
             directory = Path(tmp)
             (directory / 'src').mkdir()
             (directory / 'src/omarchy').symlink_to(Path(SOURCE).resolve(), target_is_directory=True)
-            (directory / 'src/omarchy-oncachy-setup').symlink_to(SETUP)
+            for local in (SETUP, EXTRAS, EXTRAS.with_name('extras.packages')):
+                (directory / 'src' / local.name).symlink_to(local)
             (directory / 'tools').mkdir()
             mock = directory / 'tools/magick'
             # Asset generation is mocked; this test checks staging, not image rendering.
@@ -186,7 +247,8 @@ class UpstreamTests(unittest.TestCase):
             for path in ('etc/fastfetch/config.jsonc', 'etc/xdg/kitty/kitty.conf', 'usr/share/pixmaps/omarchy.png',
                          'usr/share/omarchy/default/bashrc', 'usr/share/omarchy/logo.txt'):
                 self.assertTrue((payload / path).is_file(), path)
-            for command in ('omarchy-update', 'omarchy-oncachy-setup'):
+            self.assertTrue((payload / 'usr/share/omarchy-oncachy/extras.packages').is_file())
+            for command in ('omarchy-update', 'omarchy-oncachy-setup', 'omarchy-oncachy-extras'):
                 self.assertTrue((payload / 'usr/bin' / command).stat().st_mode & 0o111, command)
             for forbidden in ('boot', 'etc/mkinitcpio.conf.d', 'etc/limine-entry-tool.d',
                               'etc/pacman.conf', 'etc/os-release', 'etc/sudoers.d', 'etc/pam.d',

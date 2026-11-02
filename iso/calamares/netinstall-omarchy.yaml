@@ -1,0 +1,10 @@
+- name: "Omarchy"
+  description: "Omarchy's Hyprland desktop, packaged for CachyOS by omarchy-oncachy."
+  description[fr]: "Le bureau Hyprland d'Omarchy, empaqueté pour CachyOS par omarchy-oncachy."
+  platform: "desktop"
+  hidden: false
+  selected: false
+  expanded: false
+  critical: true
+  packages:
+    - omarchy-oncachy-desktop

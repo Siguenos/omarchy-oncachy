@@ -39,6 +39,33 @@ cd omarchy-oncachy
 
 Reboot and log in to the Omarchy session. Updates come with `sudo pacman -Syu` (or `omarchy update`).
 
+### Extra applications
+
+`./install.sh --extras` (or `omarchy-oncachy-extras` later) also installs the applications listed in
+[`extras.packages`](pkgbuilds/omarchy-oncachy/extras.packages): repository packages with pacman,
+AUR packages with yay, one at a time so a failing AUR build does not stop the others.
+
+## Installer ISO
+
+`iso/` turns the official CachyOS desktop ISO into one whose Calamares installer offers Omarchy
+next to the other desktops. Choosing it installs `omarchy-oncachy-desktop`, puts `[omarchy]` ahead of
+the CachyOS repositories, sets the user up with `omarchy-oncachy-setup` (bash as login shell) and,
+for ISOs built with `--extras`, installs the extra applications. Partitioning, encryption,
+bootloader and drivers stay CachyOS's.
+
+```bash
+# As root on CachyOS/Arch (squashfs-tools, xorriso, gnupg):
+sudo iso/remaster.sh [--extras] cachyos-desktop-linux-YYMMDD.iso omarchy-oncachy-YYYY.MM.DD-x86_64.iso
+# Or from a machine without root, on a CachyOS VM reachable over SSH with sudo
+# (downloads and checks the latest CachyOS ISO unless --iso is given):
+iso/build-in-vm.sh [--extras] [--iso FILE] [--ssh-config FILE] HOST OUTPUT_DIR
+```
+
+The ISO keeps the original boot setup and volume label; only the live root changes
+(`iso/customize.sh`). CachyOS Hello upgrades the installer before starting it, so the live root also
+carries a pacman hook that adds Omarchy again after that upgrade. The ISO is not published here
+(about 3 GB); build it when needed so it starts from the current CachyOS release.
+
 ### Repository
 
 `install.sh` sets this up; to do it by hand, import the signing key and add the repository

@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Install the optional applications listed in extras.packages: repository
+# packages with pacman, the others from the AUR with yay, one at a time so a
+# failing AUR build does not stop the rest.
+#
+#   omarchy-oncachy-extras [--yes] [LIST]    as the user
+#   omarchy-oncachy-extras --for USER [LIST] as root (ISO installer chroot): runs
+#                                            as USER, unattended, with passwordless
+#                                            sudo while it runs
+set -eEuo pipefail
+
+LIST=/usr/share/omarchy-oncachy/extras.packages
+SUDOERS=/etc/sudoers.d/90-omarchy-oncachy-extras
+
+usage() { sed -n '2,9s/^# \{0,1\}//p' "$0"; }
+
+# Print the package names of a list: one per line, '#' starts a comment.
+list_packages() { sed 's/#.*//; s/[[:space:]]//g; /^$/d' "$1"; }
+
+install_extras() {
+  local yes=$1 list=$2 package
+  local -a packages repo=() aur=() failed=() confirm=() yay_args=()
+  mapfile -t packages < <(list_packages "$list")
+  local available
+  available=$(pacman -Slq)
+  for package in "${packages[@]}"; do
+    if grep -qxF "$package" <<< "$available"; then repo+=("$package"); else aur+=("$package"); fi
+  done
+  if (( yes )); then
+    confirm=(--noconfirm)
+    yay_args=(--answerclean None --answerdiff None --answeredit None)
+  fi
+
+  if (( ${#repo[@]} )); then
+    echo "Repository packages: ${repo[*]}"
+    sudo pacman -S --needed "${confirm[@]}" "${repo[@]}"
+  fi
+  for package in "${aur[@]}"; do
+    echo "AUR package: $package"
+    yay -S --aur --needed --sudoloop --removemake "${confirm[@]}" "${yay_args[@]}" "$package" ||
+      failed+=("$package")
+  done
+  if (( ${#failed[@]} )); then
+    echo "Could not install from the AUR: ${failed[*]}. Retry with: yay -S ${failed[*]}" >&2
+    return 1
+  fi
+  echo "Extras installed."
+}
+
+[[ ${BASH_SOURCE[0]} == "$0" ]] || return 0
+
+yes=0 for_user=''
+while (( $# )); do
+  case $1 in
+    --yes) yes=1 ;;
+    --for) [[ -n ${2:-} ]] || { usage >&2; exit 2; }; for_user=$2; shift ;;
+    -h|--help) usage; exit 0 ;;
+    -*) usage >&2; exit 2 ;;
+    *) LIST=$1 ;;
+  esac
+  shift
+done
+[[ -r $LIST ]] || { echo "Cannot read $LIST" >&2; exit 1; }
+
+if [[ -n $for_user ]]; then
+  (( EUID == 0 )) || { echo "--for must run as root." >&2; exit 1; }
+  home=$(getent passwd "$for_user" | cut -d: -f6)
+  [[ -n $home ]] || { echo "Unknown user: $for_user" >&2; exit 1; }
+  list=$(realpath -- "$LIST")
+  # yay refuses to build as root; the user needs sudo without a password prompt.
+  # !authenticate also covers yay's `sudo -v`, which asks for a password unless
+  # every rule for the user (e.g. %wheel's) is NOPASSWD.
+  trap 'rm -f "$SUDOERS"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  install -m 440 /dev/null "$SUDOERS"
+  printf 'Defaults:%s !authenticate\n%s ALL=(ALL) NOPASSWD: ALL\n' "$for_user" "$for_user" > "$SUDOERS"
+  visudo -cqf "$SUDOERS"
+  runuser -u "$for_user" -- env HOME="$home" USER="$for_user" LOGNAME="$for_user" \
+    PATH=/usr/local/bin:/usr/bin bash "$0" --yes "$list"
+else
+  (( EUID != 0 )) || { echo "Run as your normal user (or use --for USER as root)." >&2; exit 1; }
+  install_extras "$yes" "$LIST"
+fi

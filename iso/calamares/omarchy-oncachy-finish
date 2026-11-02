@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Calamares job, after the users and shell setup: finish an Omarchy install,
+# or remove the repositories omarchy-oncachy-repos added when another desktop
+# was chosen.
+# Usage: omarchy-oncachy-finish ROOT USER
+exec 2>&1
+set -eEuo pipefail
+root=$1 user=$2
+dir=/etc/calamares/omarchy-oncachy
+source "$dir/repos.sh"
+conf=$root/etc/pacman.conf
+
+repository() {
+  awk -v name="$1" "${@:2}" -f "$dir/pacman-config.awk" "$conf" > "$conf.new"
+  cat "$conf.new" > "$conf"
+  rm "$conf.new"
+}
+target() { chroot "$root" "$@"; }
+
+if ! target pacman -Q omarchy-oncachy-desktop >/dev/null 2>&1; then
+  repository omarchy -v remove=1
+  repository omarchy-oncachy -v remove=1
+  echo "Omarchy not installed: removed its repositories."
+  exit 0
+fi
+
+# Same priority as install.sh: [omarchy] ahead of the CachyOS repositories,
+# with its builds of the packages both provide.
+repository omarchy -v server="$OMARCHY_SERVER" -v siglevel='Required DatabaseOptional'
+target pacman -Sy
+mapfile -t shared < <(comm -12 <(target pacman -Slq omarchy | sort -u) <(target pacman -Qq | sort -u))
+if (( ${#shared[@]} )); then
+  target pacman -S --noconfirm "${shared[@]/#/omarchy/}"
+fi
+
+# Omarchy's shell configuration is for bash (CachyOS's installer picks fish).
+target chsh -s /bin/bash "$user"
+target omarchy-oncachy-setup --system "$user"
+if [[ -e $dir/extras ]]; then
+  target omarchy-oncachy-extras --for "$user" ||
+    echo "Some extras failed; run omarchy-oncachy-extras after the first login to retry."
+fi

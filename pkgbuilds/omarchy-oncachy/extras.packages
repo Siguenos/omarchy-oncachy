@@ -1,0 +1,52 @@
+# Optional applications installed by omarchy-oncachy-extras (install.sh --extras,
+# or the ISO's Omarchy choice). Repository packages go through pacman, the others
+# are built from the AUR with yay. Packages Omarchy already installs are skipped.
+
+# Development
+jetbrains-toolbox
+visual-studio-code-bin
+gitkraken
+github-cli
+nvm
+dotnet-runtime
+dotnet-sdk
+aspnet-runtime
+mariadb
+android-tools
+mutagen.io-bin
+rtk
+
+# Infrastructure
+kubectl
+helm
+k9s
+argocd
+terraform
+ansible
+ansible-lint
+sops
+age
+docker-buildx
+
+# Network and remote access
+wireguard-tools
+remmina
+freerdp
+nload
+
+# System
+atop
+btop
+screen
+rclone
+kopia-ui-bin
+cups
+cups-browsed
+
+# Applications
+bitwarden
+bitwarden-cli
+obsidian
+tasks-bin
+supersonic-desktop-bin
+artcraft-launcher

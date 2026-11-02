@@ -214,8 +214,8 @@ package_omarchy-oncachy-desktop() {
     noto-fonts-emoji
     nss-mdns
     nvim
-    obsidian
     obs-studio
+    obsidian
     omacalc
     omacut
     omarchy-nvim

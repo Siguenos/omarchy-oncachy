@@ -45,7 +45,7 @@ class ScriptTests(unittest.TestCase):
             self.assertIn('tealdeer', listed)
             for excluded in ('plymouth', 'tldr', 'kernel-modules-hook', '#'):
                 self.assertNotIn(excluded, listed)
-            self.assertEqual(listed, sorted(set(listed)))
+            self.assertEqual(listed, sorted(set(listed)))  # byte order, as LC_ALL=C
 
     def test_pacman_config_adds_repository_first(self):
         with tempfile.TemporaryDirectory() as tmp:

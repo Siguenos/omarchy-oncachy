@@ -8,4 +8,4 @@ set -eEuo pipefail
   # replaces tldr. The extras complete the audio/Qt stack Omarchy's ISO brings.
   sed 's/#.*//' "$1" | awk 'NF && $1 !~ /^(tldr|plymouth|kernel-modules-hook)$/ {print $1}'
   printf '%s\n' tealdeer pipewire pipewire-alsa pipewire-pulse qt6-wayland
-} | sort -u
+} | LC_ALL=C sort -u

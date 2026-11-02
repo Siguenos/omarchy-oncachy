@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+# Set up the Omarchy desktop on CachyOS after installing omarchy-oncachy-desktop.
+#
+#   omarchy-oncachy-setup            as the user: system part through sudo, then the user part
+#   omarchy-oncachy-setup --user     as the user: user part only
+#   omarchy-oncachy-setup --system [USER]
+#                                    as root: system part, then the user part for USER
+#                                    (used by the ISO installer in the target chroot)
+#   --force                          redo the user part even if it already ran
+set -eEuo pipefail
+
+OMARCHY_PATH=/usr/share/omarchy
+# Overridable for tests.
+VCONSOLE=${OMARCHY_ONCACHY_VCONSOLE:-/etc/vconsole.conf}
+X11_KEYBOARD=${OMARCHY_ONCACHY_X11_KEYBOARD:-/etc/X11/xorg.conf.d/00-keyboard.conf}
+SDDM_STATE=${OMARCHY_ONCACHY_SDDM_STATE:-/var/lib/sddm/state.conf}
+SESSION=/usr/share/wayland-sessions/omarchy.desktop
+
+usage() { sed -n '2,10s/^# \{0,1\}//p' "$0"; }
+
+# Print "LAYOUT VARIANT" (variant may be empty). Omarchy's Hyprland config reads
+# XKBLAYOUT/XKBVARIANT from vconsole.conf; CachyOS installers write the X11
+# layout to 00-keyboard.conf and only a console KEYMAP to vconsole.conf.
+keyboard_layout() {
+  local layout='' variant='' keymap=''
+  if [[ -r $VCONSOLE ]]; then
+    layout=$(sed -n 's/^[[:space:]]*XKBLAYOUT=["'\'']\{0,1\}\([^"'\'' ]*\).*/\1/p' "$VCONSOLE" | tail -1)
+    variant=$(sed -n 's/^[[:space:]]*XKBVARIANT=["'\'']\{0,1\}\([^"'\'' ]*\).*/\1/p' "$VCONSOLE" | tail -1)
+    keymap=$(sed -n 's/^[[:space:]]*KEYMAP=["'\'']\{0,1\}\([^"'\'' ]*\).*/\1/p' "$VCONSOLE" | tail -1)
+  fi
+  if [[ -z $layout && -r $X11_KEYBOARD ]]; then
+    layout=$(sed -n 's/.*Option[[:space:]]*"XkbLayout"[[:space:]]*"\([^"]*\)".*/\1/p' "$X11_KEYBOARD" | tail -1)
+    variant=$(sed -n 's/.*Option[[:space:]]*"XkbVariant"[[:space:]]*"\([^"]*\)".*/\1/p' "$X11_KEYBOARD" | tail -1)
+  fi
+  if [[ -z $layout && -n $keymap ]]; then
+    # Console keymaps like fr-latin9 or de-latin1: only the language maps reliably.
+    layout=${keymap%%-*}
+    variant=''
+  fi
+  echo "${layout:-us} $variant"
+}
+
+system_setup() {
+  local layout variant
+  read -r layout variant <<< "$(keyboard_layout)"
+  if ! grep -qs '^[[:space:]]*XKBLAYOUT=' "$VCONSOLE"; then
+    echo "Keyboard: XKBLAYOUT=$layout${variant:+ XKBVARIANT=$variant} in $VCONSOLE"
+    { echo "XKBLAYOUT=$layout"; [[ -z $variant ]] || echo "XKBVARIANT=$variant"; } >> "$VCONSOLE"
+  fi
+
+  # SDDM preselects the last session used; make Omarchy the first one.
+  if ! grep -qs '^Session=.' "$SDDM_STATE"; then
+    echo "SDDM: default session Omarchy"
+    mkdir -p "$(dirname -- "$SDDM_STATE")"
+    if grep -qs '^Session=$' "$SDDM_STATE"; then
+      sed -i "s|^Session=\$|Session=$SESSION|" "$SDDM_STATE"
+    elif grep -qs '^\[Last\]' "$SDDM_STATE"; then
+      sed -i "/^\[Last\]/a Session=$SESSION" "$SDDM_STATE"
+    else
+      printf '[Last]\nSession=%s\n' "$SESSION" >> "$SDDM_STATE"
+    fi
+    (( EUID != 0 )) || ! id sddm >/dev/null 2>&1 || chown sddm:sddm "$SDDM_STATE"
+  fi
+
+  if [[ -z ${OMARCHY_ONCACHY_NO_SYSTEMCTL:-} ]]; then
+    systemctl enable sddm.service NetworkManager.service
+    systemctl set-default graphical.target
+  fi
+}
+
+user_setup() {
+  local force=$1 state="$HOME/.local/state/omarchy-oncachy" backup layout variant
+  if [[ -e $state/setup-done ]] && (( !force )); then
+    echo "Omarchy user setup already done for $USER (use --force to redo it)."
+    return
+  fi
+  mkdir -p "$state"
+  backup="$state/backup-$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$backup"
+  [[ ! -e $HOME/.config ]] || cp -a "$HOME/.config" "$backup/config"
+  [[ ! -e $HOME/.bashrc ]] || cp -a "$HOME/.bashrc" "$backup/bashrc"
+  echo "Config backup: $backup"
+
+  # Retire hyprland.conf so it cannot override the Lua configuration.
+  mkdir -p "$HOME/.config"
+  [[ ! -e $HOME/.config/hypr ]] || mv "$HOME/.config/hypr" "$backup/hypr-retired"
+  cp -a "$OMARCHY_PATH/config/." "$HOME/.config/"
+  mkdir -p "$HOME/.local/share/icons/hicolor" "$HOME/.local/share/applications"
+  cp -a "$OMARCHY_PATH/application-icons/hicolor/." "$HOME/.local/share/icons/hicolor/"
+  for desktop in "$OMARCHY_PATH"/applications/hidden/*.desktop; do
+    [[ ! -f $desktop ]] || cp "$desktop" "$HOME/.local/share/applications/"
+  done
+  mkdir -p "$HOME/.local/state/omarchy/toggles/hypr" "$HOME/.local/share/nautilus-python/extensions"
+  cp "$OMARCHY_PATH/default/hypr/toggles/flags.lua" "$HOME/.local/state/omarchy/toggles/hypr/"
+  cp "$OMARCHY_PATH"/default/nautilus-python/extensions/*.py "$HOME/.local/share/nautilus-python/extensions/"
+
+  # fcitx5 keeps its own layout list, which otherwise starts as US.
+  read -r layout variant <<< "$(keyboard_layout)"
+  if [[ $layout != us || -n $variant ]]; then
+    local name="keyboard-$layout${variant:+-$variant}"
+    mkdir -p "$HOME/.config/fcitx5"
+    cat > "$HOME/.config/fcitx5/profile" <<PROFILE
+[Groups/0]
+Name=Default
+Default Layout=$layout${variant:+-$variant}
+DefaultIM=$name
+
+[Groups/0/Items/0]
+Name=$name
+Layout=
+
+[GroupOrder]
+0=Default
+PROFILE
+  fi
+
+  export OMARCHY_PATH OMARCHY_INSTALL="$OMARCHY_PATH/install" PATH="$OMARCHY_PATH/bin:$PATH"
+  # Not "runtime" (no live session needed) and not "iso-chroot" (which expects
+  # the official ISO's bundled packages): install/user/* then fetch what it needs.
+  export OMARCHY_SETUP_CONTEXT=cachyos
+  omarchy-provision-user --first-install
+  touch "$state/setup-done"
+  echo "Omarchy user setup done for $USER."
+}
+
+# The tests source this file for its functions.
+[[ ${BASH_SOURCE[0]} == "$0" ]] || return 0
+
+mode=all force=0 target_user=''
+while (( $# )); do
+  case $1 in
+    --system) mode=system ;;
+    --user) mode=user ;;
+    --force) force=1 ;;
+    -h|--help) usage; exit 0 ;;
+    -*) usage >&2; exit 2 ;;
+    *) [[ $mode == system && -z $target_user ]] || { usage >&2; exit 2; }; target_user=$1 ;;
+  esac
+  shift
+done
+
+case $mode in
+  system)
+    (( EUID == 0 )) || { echo "--system must run as root." >&2; exit 1; }
+    system_setup
+    if [[ -n $target_user ]]; then
+      home=$(getent passwd "$target_user" | cut -d: -f6)
+      [[ -n $home ]] || { echo "Unknown user: $target_user" >&2; exit 1; }
+      args=(--user)
+      (( !force )) || args+=(--force)
+      runuser -u "$target_user" -- env HOME="$home" USER="$target_user" LOGNAME="$target_user" \
+        PATH=/usr/local/bin:/usr/bin bash "$0" "${args[@]}"
+    fi
+    ;;
+  user|all)
+    (( EUID != 0 )) || { echo "Run as your normal user (or use --system USER as root)." >&2; exit 1; }
+    [[ $mode == user ]] || sudo "$0" --system
+    user_setup "$force"
+    [[ $mode == user ]] || echo "Reboot, then log in to the Omarchy session."
+    ;;
+esac

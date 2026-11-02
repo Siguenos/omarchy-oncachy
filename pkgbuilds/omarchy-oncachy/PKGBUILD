@@ -1,0 +1,276 @@
+# Omarchy desktop for CachyOS, built from the official Omarchy sources.
+# Adapted from omarchy-on-cachyos (MIT, Mark Roboff and MiguelU-coder): ships the
+# desktop runtime and defaults, never Omarchy's system and boot stack.
+pkgbase=omarchy-oncachy
+pkgname=(omarchy-oncachy omarchy-oncachy-desktop)
+pkgver=4.0.6
+pkgrel=1
+# Upstream tag and the commit it pointed to when reviewed (bin/bump-omarchy.sh).
+_tag=v4.0.6
+_commit=237f1b4071a0bff2296c6d740ba2b9fd695ebfa0
+arch=(x86_64)
+url='https://github.com/Siguenos/omarchy-oncachy'
+license=(MIT)
+makedepends=(git imagemagick)
+options=(!debug)
+# Local files live in this repository, so they are not checksummed.
+source=("omarchy::git+https://github.com/omacom/omarchy.git#commit=$_commit"
+        omarchy-oncachy-setup)
+sha256sums=('f89ae5e85d18d8364f5c89ae05cd0fd170a8c4c93dd62e396b2b0a7fa5be4428'
+            'SKIP')
+
+prepare() {
+  cd "$srcdir/omarchy"
+  # Fixes for the upstream sources, applied in name order.
+  local patch
+  for patch in "$startdir"/patches/*.patch; do
+    [[ -f $patch ]] || continue
+    echo "Applying ${patch##*/}"
+    git apply "$patch"
+  done
+}
+
+package_omarchy-oncachy() {
+  pkgdesc='Omarchy desktop runtime and defaults adapted for CachyOS'
+  provides=("omarchy=$pkgver" "omarchy-settings=$pkgver")
+  conflicts=(omarchy omarchy-dev omarchy-settings omarchy-settings-dev)
+  depends=(omarchy-keyring 'hyprland>=0.55' quickshell uwsm sddm xdg-desktop-portal-hyprland
+    wireplumber pipewire gnome-keyring gum jq git perl fakeroot pacman-contrib
+    ttf-jetbrains-mono-nerd-basic bash curl hicolor-icon-theme)
+
+  cd "$srcdir/omarchy"
+  install -d "$pkgdir/usr/bin" "$pkgdir/usr/share/omarchy/bin"
+  for executable in bin/*; do
+    [[ -f $executable ]] || continue
+    base=${executable##*/}
+    install -Dm755 "$executable" "$pkgdir/usr/bin/$base"
+    ln -s "/usr/bin/$base" "$pkgdir/usr/share/omarchy/bin/$base"
+  done
+  for directory in install themes migrations shell config default applications; do
+    cp -a "$directory" "$pkgdir/usr/share/omarchy/"
+  done
+  # Keep the existing user's password-protected keyring/login policy.
+  sed -i '\|/user/default-keyring.sh|d' "$pkgdir/usr/share/omarchy/install/user/all.sh"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  for file in version logo.txt logo.svg icon.txt icon.png; do
+    install -Dm644 "$file" "$pkgdir/usr/share/omarchy/$file"
+  done
+
+  # Ship only desktop integration at live system paths. Do not copy etc/ or
+  # /etc/skel: those trees include mkinitcpio, Limine, PAM, sudo and distro ID.
+  install -Dm644 default/uwsm/env.d/10-omarchy "$pkgdir/usr/share/uwsm/env.d/10-omarchy"
+  install -Dm644 default/environment.d/10-omarchy-fcitx.conf "$pkgdir/usr/lib/environment.d/10-omarchy-fcitx.conf"
+  install -Dm644 default/fontconfig/conf.avail/50-omarchy.conf "$pkgdir/usr/share/fontconfig/conf.avail/50-omarchy.conf"
+  install -d "$pkgdir/etc/fonts/conf.d"
+  ln -s /usr/share/fontconfig/conf.avail/50-omarchy.conf "$pkgdir/etc/fonts/conf.d/50-omarchy.conf"
+  install -Dm644 default/xdg-terminal-exec/hyprland-xdg-terminals.list "$pkgdir/usr/share/xdg-terminal-exec/hyprland-xdg-terminals.list"
+  install -Dm644 default/applications/mimeapps.list "$pkgdir/usr/share/applications/mimeapps.list"
+  install -Dm644 etc/profile.d/omarchy.sh "$pkgdir/etc/profile.d/omarchy.sh"
+  install -Dm644 etc/mise/conf.d/omarchy.toml "$pkgdir/etc/mise/conf.d/omarchy.toml"
+  for service in default/systemd/user/*.service; do
+    install -Dm644 "$service" "$pkgdir/usr/lib/systemd/user/${service##*/}"
+  done
+  # Use the existing SDDM configuration, adding a selectable session only.
+  install -Dm644 default/wayland-sessions/omarchy.desktop "$pkgdir/usr/share/wayland-sessions/omarchy.desktop"
+  install -Dm644 default/fonts/omarchy/omarchy.ttf "$pkgdir/usr/share/fonts/omarchy/omarchy.ttf"
+
+  # Application launchers and icons override defaults at user scope. Never own
+  # /usr/share/applications/{foot,imv,mpv}.desktop or icons shipped by those apps.
+  icon_root="$pkgdir/usr/share/omarchy/application-icons/hicolor"
+  for icon in applications/icons/*; do
+    [[ -f $icon ]] || continue
+    icon_name=${icon##*/}
+    icon_id=$(printf '%s' "${icon_name%.*}" | tr '[:upper:]' '[:lower:]' | sed 's/[^[:alnum:]]\+/-/g; s/^-//; s/-$//')
+    if [[ $icon_name == *.svg ]]; then
+      install -Dm644 "$icon" "$icon_root/scalable/apps/$icon_id.svg"
+    else
+      for size in 48 256; do
+        install -d "$icon_root/${size}x$size/apps"
+        magick "$icon" -thumbnail "${size}x$size" -background transparent -gravity center -extent "${size}x$size" \
+          "PNG32:$icon_root/${size}x$size/apps/$icon_id.png"
+      done
+    fi
+  done
+
+  # Omarchy's updater and migrations assume its own system profile. Here the
+  # desktop is a regular package from the [omarchy-oncachy] repository.
+  cat > "$pkgdir/usr/bin/omarchy-update" <<'UPDATE'
+#!/usr/bin/env bash
+set -euo pipefail
+case ${1:-} in
+  -y) args=(--noconfirm) ;;
+  '') args=() ;;
+  *) echo 'Usage: omarchy update [-y]' >&2; exit 2 ;;
+esac
+sudo pacman -Syu "${args[@]}"
+echo 'CachyOS and Omarchy packages updated. Reboot if your kernel or desktop was updated.'
+UPDATE
+  chmod 755 "$pkgdir/usr/bin/omarchy-update"
+  # Block the stock conversion path, which installs the boot stack and swaps
+  # pacman.conf.
+  cat > "$pkgdir/usr/bin/omarchy-upgrade-to-quattro" <<'UPGRADE'
+#!/usr/bin/env bash
+echo 'Not needed with omarchy-oncachy: update with sudo pacman -Syu.' >&2
+exit 1
+UPGRADE
+  chmod 755 "$pkgdir/usr/bin/omarchy-upgrade-to-quattro"
+
+  install -Dm755 "$srcdir/omarchy-oncachy-setup" "$pkgdir/usr/bin/omarchy-oncachy-setup"
+}
+
+package_omarchy-oncachy-desktop() {
+  pkgdesc='Omarchy desktop applications and tools for CachyOS (meta package)'
+  # BEGIN depends: generated by bin/sync-desktop-depends.sh from install/omarchy-base.packages
+  depends=("omarchy-oncachy=$pkgver-$pkgrel"
+    aether
+    alsa-utils
+    asdcontrol
+    avahi
+    bash-completion
+    bat
+    bluez
+    bluez-tools
+    bluez-utils
+    bolt
+    brightnessctl
+    btop
+    chromium
+    clang
+    cliamp
+    cups
+    cups-filters
+    cups-pk-helper
+    ddcutil
+    docker
+    docker-buildx
+    docker-compose
+    dosfstools
+    dotnet-runtime
+    dua-cli
+    evince
+    exfatprogs
+    expac
+    eza
+    fakeroot
+    fastfetch
+    fcitx5
+    fcitx5-gtk
+    fcitx5-qt
+    fd
+    ffmpegthumbnailer
+    fontconfig
+    foot
+    fzf
+    git
+    gnome-disk-utility
+    gnome-keyring
+    gnome-themes-extra
+    gpu-screen-recorder
+    grim
+    gum
+    gvfs-mtp
+    gvfs-nfs
+    gvfs-smb
+    herdr
+    hyprland
+    hyprland-guiutils
+    hyprland-preview-share-picker
+    hyprpicker
+    hyprsunset
+    imagemagick
+    imv
+    inetutils
+    inotify-tools
+    inxi
+    jq
+    kdenlive
+    lazydocker
+    lazygit
+    less
+    libreoffice-fresh
+    libsecret
+    libvips
+    libyaml
+    llvm
+    localsend
+    lua51
+    luarocks
+    man-db
+    mariadb-libs
+    mise-bin
+    moonlight-qt
+    mpv
+    mpv-mpris
+    nautilus
+    nautilus-python
+    networkmanager
+    noto-fonts
+    noto-fonts-cjk
+    noto-fonts-emoji
+    nss-mdns
+    nvim
+    obsidian
+    obs-studio
+    omacalc
+    omacut
+    omarchy-nvim
+    omawrite
+    pacman-contrib
+    pamixer
+    pinta
+    pipewire
+    pipewire-alsa
+    pipewire-pulse
+    plocate
+    postgresql-libs
+    power-profiles-daemon
+    python-gobject
+    python-poetry-core
+    qemu-user-static-binfmt
+    qrencode
+    qt6-imageformats
+    qt6-wayland
+    quickshell
+    ripgrep
+    ruby
+    sddm
+    slurp
+    socat
+    starship
+    sushi
+    system-config-printer
+    tealdeer
+    tensaku
+    tesseract
+    tesseract-data-eng
+    tmux
+    tobi-try
+    tree-sitter-cli
+    ttf-ia-writer
+    ttf-jetbrains-mono-nerd-basic
+    ttfx
+    tzupdate
+    udiskie
+    ufw
+    ufw-docker
+    unzip
+    usage
+    uwsm
+    whois
+    wireless-regdb
+    wireplumber
+    wl-clipboard
+    woff2-font-awesome
+    wtype
+    xdg-desktop-portal-gtk
+    xdg-desktop-portal-hyprland
+    xdg-terminal-exec
+    xournalpp
+    yaru-icon-theme
+    yay
+    yt-dlp
+    zbar
+    zoxide
+  )
+  # END depends
+}

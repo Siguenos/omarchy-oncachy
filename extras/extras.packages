@@ -45,6 +45,8 @@ cups
 cups-browsed
 
 # Applications
+vivaldi
+vivaldi-ffmpeg-codecs
 bitwarden
 bitwarden-cli
 obsidian

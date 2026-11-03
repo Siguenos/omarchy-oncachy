@@ -143,6 +143,20 @@ class SetupTests(unittest.TestCase):
             self.assertIn('plasma.desktop', state.read_text())
             self.assertNotIn('omarchy.desktop', state.read_text())
 
+    def test_system_setup_sets_login_user(self):
+        # Omarchy's SDDM theme logs in as [Last] User, with no field to type it.
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / 'sddm/state.conf'
+            for _ in range(2):
+                result = self.setup_shell(tmp, 'system_setup alex')
+                self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(state.read_text(),
+                             '[Last]\nUser=alex\nSession=/usr/share/wayland-sessions/omarchy.desktop\n')
+            result = self.setup_shell(tmp, 'system_setup bob')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('User=alex\n', state.read_text())
+            self.assertNotIn('bob', state.read_text())
+
     def test_system_mode_requires_root(self):
         if os.geteuid() == 0:
             self.skipTest('running as root')

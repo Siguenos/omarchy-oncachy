@@ -41,8 +41,23 @@ keyboard_layout() {
   echo "${layout:-us} $variant"
 }
 
+# Set KEY=VALUE in SDDM's [Last] section unless KEY already has a value.
+sddm_last() {
+  local key=$1 value=$2
+  ! grep -qs "^$key=." "$SDDM_STATE" || return 1
+  mkdir -p "$(dirname -- "$SDDM_STATE")"
+  if grep -qs "^$key=\$" "$SDDM_STATE"; then
+    sed -i "s|^$key=\$|$key=$value|" "$SDDM_STATE"
+  elif grep -qs '^\[Last\]' "$SDDM_STATE"; then
+    sed -i "/^\[Last\]/a $key=$value" "$SDDM_STATE"
+  else
+    printf '[Last]\n%s=%s\n' "$key" "$value" >> "$SDDM_STATE"
+  fi
+  (( EUID != 0 )) || ! id sddm >/dev/null 2>&1 || chown sddm:sddm "$SDDM_STATE"
+}
+
 system_setup() {
-  local layout variant
+  local user=${1:-} layout variant
   read -r layout variant <<< "$(keyboard_layout)"
   if ! grep -qs '^[[:space:]]*XKBLAYOUT=' "$VCONSOLE"; then
     echo "Keyboard: XKBLAYOUT=$layout${variant:+ XKBVARIANT=$variant} in $VCONSOLE"
@@ -50,18 +65,9 @@ system_setup() {
   fi
 
   # SDDM preselects the last session used; make Omarchy the first one.
-  if ! grep -qs '^Session=.' "$SDDM_STATE"; then
-    echo "SDDM: default session Omarchy"
-    mkdir -p "$(dirname -- "$SDDM_STATE")"
-    if grep -qs '^Session=$' "$SDDM_STATE"; then
-      sed -i "s|^Session=\$|Session=$SESSION|" "$SDDM_STATE"
-    elif grep -qs '^\[Last\]' "$SDDM_STATE"; then
-      sed -i "/^\[Last\]/a Session=$SESSION" "$SDDM_STATE"
-    else
-      printf '[Last]\nSession=%s\n' "$SESSION" >> "$SDDM_STATE"
-    fi
-    (( EUID != 0 )) || ! id sddm >/dev/null 2>&1 || chown sddm:sddm "$SDDM_STATE"
-  fi
+  ! sddm_last Session "$SESSION" || echo "SDDM: default session Omarchy"
+  # Omarchy's theme has no user field: it logs in as the last user.
+  [[ -z $user ]] || ! sddm_last User "$user" || echo "SDDM: default user $user"
 
   # Omarchy's login theme, shipped in /usr/share/sddm/themes/omarchy. Kept if
   # this file was edited to pick another theme.
@@ -160,7 +166,7 @@ done
 case $mode in
   system)
     (( EUID == 0 )) || { echo "--system must run as root." >&2; exit 1; }
-    system_setup
+    system_setup "${target_user:-${SUDO_USER:-}}"
     if [[ -n $target_user ]]; then
       home=$(getent passwd "$target_user" | cut -d: -f6)
       [[ -n $home ]] || { echo "Unknown user: $target_user" >&2; exit 1; }

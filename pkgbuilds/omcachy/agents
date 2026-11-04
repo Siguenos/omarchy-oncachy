@@ -13,7 +13,7 @@
 #   agents rm <nom>           oublie le titre de <nom> (n'arrête pas la session)
 #
 # <nom> = identifiant de la session screen (court, sans espace, ex. lot-serie).
-# <titre> = ce qui s'affiche dans la fenêtre du terminal (ex. « Lot/Série — ticket 123 »).
+# <titre> = ce qui s'affiche dans la fenêtre du terminal et dans la barre en bas de chaque agent (ex. « Lot/Série — ticket 123 »).
 # Config locale dans ~/.config/agents/ : host (user@hôte, obligatoire), sync (racine synchronisée, ex. /home/moi/pro),
 # dir (dossier par défaut), titles (« nom<TAB>titre »).
 # Côté VM, le hook Claude Code envoie une cloche (\a) sur Notification/Stop -> fenêtre « urgente ».
@@ -71,16 +71,26 @@ cmd_ls() {
   done <<< "$rows"
 }
 
-STARTER="/usr/share/omcachy/agent-start"
-[ -f "$STARTER" ] || STARTER="$(dirname "$(readlink -f "$0")")/agent-start"
+# Le lanceur : celui à côté du script (dépôt cloné), sinon celui du paquet.
+STARTER="$(dirname "$(readlink -f "$0")")/agent-start"
+[ -f "$STARTER" ] || STARTER="/usr/share/omcachy/agent-start"
 
 agent_exists() { remote_sessions | cut -f1 | grep -qx "$1"; }
 
-connect() {  # connect <nom> : reprend la session existante et pose le titre de la fenêtre
+# (ré)installe le lanceur sur la VM (idempotent) ; le shell de login de la VM est fish, d'où ce script bash.
+install_starter() {
+  ssh "$HOST" 'mkdir -p ~/.local/bin; cat > ~/.local/bin/agent-start; chmod +x ~/.local/bin/agent-start' < "$STARTER"
+}
+
+# Titre de <nom> (ou le nom), en base64 : passé tel quel à la VM, sans souci de guillemets.
+title_b64() { local t; t="$(get_title "$1")"; printf %s "${t:-$1}" | base64 -w0; }
+
+connect() {  # connect <nom> : reprend la session existante ; titre de la fenêtre + barre de titre dans screen
   local name="$1" title; valid_name "$name"
   title="$(get_title "$name")"; title="${title:-$name}"
   printf '\033]0;%s\007' "$title"
-  exec ssh -t "$HOST" screen -xRR -S "$name"
+  install_starter
+  exec ssh -t "$HOST" '~/.local/bin/agent-start' --attach "$name" "$(title_b64 "$name")"
 }
 
 create() {  # create <nom> <dossier> <avec_claude 0|1> : crée la session, y lance claude en Remote Control
@@ -88,8 +98,7 @@ create() {  # create <nom> <dossier> <avec_claude 0|1> : crée la session, y lan
   title="$(get_title "$name")"; title="${title:-$name}"
   printf '\033]0;%s\007' "$title"
   b64="$(printf %s "$title" | base64 -w0)"
-  # (ré)installe le lanceur sur la VM (idempotent) ; le shell de login de la VM est fish, d'où ce script bash.
-  ssh "$HOST" 'mkdir -p ~/.local/bin; cat > ~/.local/bin/agent-start; chmod +x ~/.local/bin/agent-start' < "$STARTER"
+  install_starter
   exec ssh -t "$HOST" '~/.local/bin/agent-start' "$name" "$dir" "$b64" "$with_claude"
 }
 
@@ -128,7 +137,9 @@ case "$cmd" in
              remote_sessions | cut -f1 | grep -qx "$2" || die "pas d'agent « $2 » sur la VM (agents ls ; agents new $2)"
              connect "$2" ;;
   title)     [ $# -ge 3 ] || die "usage : agents title <nom> <titre>"
-             valid_name "$2"; set_title "$2" "${*:3}"; echo "Titre de $2 : ${*:3}" ;;
+             valid_name "$2"; set_title "$2" "${*:3}"; echo "Titre de $2 : ${*:3}"
+             # Met aussi à jour la barre de l'agent s'il tourne déjà (sinon, au prochain attach).
+             install_starter && ssh "$HOST" '~/.local/bin/agent-start' --title "$2" "$(title_b64 "$2")" || true ;;
   rm)        [ $# -ge 2 ] || die "usage : agents rm <nom>"
              set_title "$2" ""; echo "Titre de $2 oublié." ;;
   -h|--help|help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//' ;;

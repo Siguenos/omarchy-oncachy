@@ -1,12 +1,66 @@
 #!/usr/bin/env bash
 # Installé sur la VM par `agents` (~/.local/bin/agent-start). Ne pas lancer à la main.
-# agent-start <nom> <dossier> <titre_en_base64> <avec_claude 0|1>
-# Crée la session screen <nom> dans <dossier> ; y lance `claude --remote-control "<titre>"` (puis un shell).
-name="$1"; dir="$2"; title="$(printf %s "$3" | base64 -d)"; with_claude="$4"
-case "$dir" in /*) ;; *) dir="$HOME/$dir" ;; esac
-cd "$dir" 2>/dev/null || cd "$HOME" || exit 1
-if [ "$with_claude" = 1 ]; then
-  exec screen -S "$name" bash -c 'PATH="$HOME/.local/bin:$PATH"; claude --remote-control "$1"; exec bash' _ "$title"
-else
-  exec screen -S "$name"
-fi
+#   agent-start <nom> <dossier> <titre_en_base64> <avec_claude 0|1>
+#       crée la session screen <nom> dans <dossier> ; y lance `claude --remote-control "<titre>"` (puis un shell).
+#   agent-start --attach <nom> <titre_en_base64>
+#       met la barre de titre de la session à jour, puis s'y reconnecte.
+#   agent-start --title <nom> <titre_en_base64>
+#       met la barre de titre à jour, session ouverte ou non (utilisé par `agents title`).
+#
+# La barre de titre est la dernière ligne du terminal, dans screen : en tiling, il n'y a pas de barre de
+# fenêtre, c'est la seule façon de voir sur quoi travaille chaque agent.
+
+BAR_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/agents"
+
+# bar_clean <texte> : le texte sans ce qui a un sens pour screen entre guillemets (\ $ ^) ; ' " et %
+# (séquences de la barre) deviennent leurs formes typographiques.
+bar_clean() {
+  local t="$1"
+  t="${t//\\/\/}"; t="${t//\$/}"; t="${t//^/}"; t="${t//\"/”}"; t="${t//\'/’}"; t="${t//%/％}"
+  printf '%s' "$t"
+}
+
+# bar_rc <nom> <titre> : le fichier de configuration screen avec la barre, sur la sortie standard.
+bar_rc() {
+  local name="$1" title="$2" text label
+  text="$(bar_clean "$title")"; label="$(bar_clean "$name")"
+  echo "startup_message off"
+  if [ "$title" = "$name" ]; then
+    echo "hardstatus alwayslastline \"%{= Wb}  $text  %{= wk}%=%{= Kk}%c \""
+  else
+    echo "hardstatus alwayslastline \"%{= Wb}  $text  %{= bw} $label %{= wk}%=%{= Kk}%c \""
+  fi
+}
+
+# write_bar <nom> <titre> : écrit le fichier, met la session à jour si elle existe, affiche le chemin.
+write_bar() {
+  local rc="$BAR_DIR/$1.screenrc"
+  mkdir -p "$BAR_DIR"
+  bar_rc "$1" "$2" > "$rc"
+  screen -S "$1" -X source "$rc" >/dev/null 2>&1 || true
+  printf '%s\n' "$rc"
+}
+
+main() {
+  case "${1:-}" in
+    --title)
+      write_bar "$2" "$(printf %s "$3" | base64 -d)" >/dev/null ;;
+    --attach)
+      write_bar "$2" "$(printf %s "$3" | base64 -d)" >/dev/null
+      exec screen -xRR -S "$2" ;;
+    *)
+      local name="$1" dir="$2" title with_claude="$4" rc
+      title="$(printf %s "$3" | base64 -d)"
+      case "$dir" in /*) ;; *) dir="$HOME/$dir" ;; esac
+      cd "$dir" 2>/dev/null || cd "$HOME" || exit 1
+      rc="$(write_bar "$name" "$title")"
+      if [ "$with_claude" = 1 ]; then
+        exec screen -c "$rc" -S "$name" bash -c 'PATH="$HOME/.local/bin:$PATH"; claude --remote-control "$1"; exec bash' _ "$title"
+      else
+        exec screen -c "$rc" -S "$name"
+      fi ;;
+  esac
+}
+
+[[ ${BASH_SOURCE[0]} == "$0" ]] || return 0
+main "$@"

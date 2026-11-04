@@ -107,6 +107,25 @@ class ScriptTests(unittest.TestCase):
             self.assertTrue((home / '.local/state/omcachy/setup-done').is_file())
             self.assertFalse((home / '.config/omarchy-oncachy').exists())
 
+    def test_agent_title_bar(self):
+        # The title ends up in a screen configuration line: nothing in it may mean something to screen.
+        title = 'Lot/S\u00e9rie \u2014 l\'agent "x" 50% $HOME \\ ^a'
+        result = run('bash', '-c', 'source "$1"; bar_rc lot-serie "$2"', 'bash', str(AGENT_START), title)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        lines = result.stdout.splitlines()
+        self.assertEqual(lines[0], 'startup_message off')
+        bar = lines[1]
+        self.assertTrue(bar.startswith('hardstatus alwayslastline "'), bar)
+        text = bar[len('hardstatus alwayslastline "'):-1]
+        self.assertNotIn('"', text)
+        for char in ('\\', '$', '^'):
+            self.assertNotIn(char, text)
+        self.assertEqual(text.count('%'), text.count('%{') + text.count('%=') + text.count('%c'))
+        self.assertIn('lot-serie', text)
+        # Without a title, the name alone is shown.
+        plain = run('bash', '-c', 'source "$1"; bar_rc lot-serie lot-serie', 'bash', str(AGENT_START))
+        self.assertEqual(plain.stdout.count('lot-serie'), 1)
+
     def test_agents_has_no_private_defaults(self):
         # The repository is public: the remote machine comes from the user's own configuration.
         for path in (AGENTS, AGENT_START, *AGENTS.parent.glob('agents.completion.*')):

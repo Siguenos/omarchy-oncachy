@@ -4,7 +4,7 @@
 pkgbase=omarchy-oncachy
 pkgname=(omarchy-oncachy omarchy-oncachy-desktop)
 pkgver=4.0.6
-pkgrel=5
+pkgrel=6
 # Upstream tag and the commit it pointed to when reviewed (bin/bump-omarchy.sh).
 _tag=v4.0.6
 _commit=237f1b4071a0bff2296c6d740ba2b9fd695ebfa0
@@ -17,8 +17,16 @@ options=(!debug)
 source=("omarchy::git+https://github.com/omacom/omarchy.git#commit=$_commit"
         omarchy-oncachy-setup
         omarchy-oncachy-extras
-        vpn-switch)
+        vpn-switch
+        agents
+        agent-start
+        agents.completion.bash
+        agents.completion.fish)
 sha256sums=('f89ae5e85d18d8364f5c89ae05cd0fd170a8c4c93dd62e396b2b0a7fa5be4428'
+            'SKIP'
+            'SKIP'
+            'SKIP'
+            'SKIP'
             'SKIP'
             'SKIP'
             'SKIP')
@@ -41,7 +49,7 @@ package_omarchy-oncachy() {
   backup=(etc/fastfetch/config.jsonc etc/xdg/kitty/kitty.conf)
   depends=(omarchy-keyring 'hyprland>=0.55' quickshell uwsm sddm xdg-desktop-portal-hyprland
     wireplumber pipewire gnome-keyring gum jq git perl fakeroot pacman-contrib
-    ttf-jetbrains-mono-nerd-basic bash curl hicolor-icon-theme)
+    ttf-jetbrains-mono-nerd-basic bash curl hicolor-icon-theme openssh)
 
   cd "$srcdir/omarchy"
   install -d "$pkgdir/usr/bin" "$pkgdir/usr/share/omarchy/bin"
@@ -130,6 +138,11 @@ UPGRADE
   install -Dm755 "$srcdir/omarchy-oncachy-setup" "$pkgdir/usr/bin/omarchy-oncachy-setup"
   install -Dm755 "$srcdir/omarchy-oncachy-extras" "$pkgdir/usr/bin/omarchy-oncachy-extras"
   install -Dm755 "$srcdir/vpn-switch" "$pkgdir/usr/bin/vpn-switch"
+  # agents: Claude agents in named screen sessions on a remote machine (Remote Control on).
+  install -Dm755 "$srcdir/agents" "$pkgdir/usr/bin/agents"
+  install -Dm755 "$srcdir/agent-start" "$pkgdir/usr/share/omarchy-oncachy/agent-start"
+  install -Dm644 "$srcdir/agents.completion.bash" "$pkgdir/usr/share/bash-completion/completions/agents"
+  install -Dm644 "$srcdir/agents.completion.fish" "$pkgdir/usr/share/fish/vendor_completions.d/agents.fish"
 }
 
 package_omarchy-oncachy-desktop() {

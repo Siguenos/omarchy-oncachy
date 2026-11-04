@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Installé sur la VM par `agents` (~/.local/bin/agent-start). Ne pas lancer à la main.
+# agent-start <nom> <dossier> <titre_en_base64> <avec_claude 0|1>
+# Crée la session screen <nom> dans <dossier> ; y lance `claude --remote-control "<titre>"` (puis un shell).
+name="$1"; dir="$2"; title="$(printf %s "$3" | base64 -d)"; with_claude="$4"
+case "$dir" in /*) ;; *) dir="$HOME/$dir" ;; esac
+cd "$dir" 2>/dev/null || cd "$HOME" || exit 1
+if [ "$with_claude" = 1 ]; then
+  exec screen -S "$name" bash -c 'PATH="$HOME/.local/bin:$PATH"; claude --remote-control "$1"; exec bash' _ "$title"
+else
+  exec screen -S "$name"
+fi

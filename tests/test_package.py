@@ -9,6 +9,8 @@ PKGBUILD = ROOT / 'pkgbuilds/omarchy-oncachy/PKGBUILD'
 SETUP = ROOT / 'pkgbuilds/omarchy-oncachy/omarchy-oncachy-setup'
 EXTRAS = ROOT / 'pkgbuilds/omarchy-oncachy/omarchy-oncachy-extras'
 VPN = ROOT / 'pkgbuilds/omarchy-oncachy/vpn-switch'
+AGENTS = ROOT / 'pkgbuilds/omarchy-oncachy/agents'
+AGENT_START = ROOT / 'pkgbuilds/omarchy-oncachy/agent-start'
 # Upstream checkout at the pinned commit, e.g. .cache/build/omarchy-oncachy/src/omarchy
 # after `bin/build.sh --nobuild`.
 SOURCE = os.environ.get('OMARCHY_TEST_SOURCE')
@@ -27,9 +29,17 @@ def pkgbuild_value(expression):
 class ScriptTests(unittest.TestCase):
     def test_bash_syntax(self):
         for path in [*ROOT.glob('bin/*.sh'), *ROOT.glob('iso/*.sh'), *ROOT.glob('iso/calamares/omarchy-oncachy-*'),
-                     ROOT / 'install.sh', PKGBUILD, SETUP, EXTRAS]:
+                     ROOT / 'install.sh', PKGBUILD, SETUP, EXTRAS, AGENTS, AGENT_START]:
             result = run('bash', '-n', str(path))
             self.assertEqual(result.returncode, 0, f'{path}: {result.stderr}')
+
+    def test_agents_has_no_private_defaults(self):
+        # The repository is public: the remote machine comes from the user's own configuration.
+        for path in (AGENTS, AGENT_START, *AGENTS.parent.glob('agents.completion.*')):
+            text = path.read_text()
+            self.assertNotIn('.corp', text, path.name)
+            self.assertNotIn('alex', text.lower(), path.name)
+            self.assertNotIn('bitwarden', text.lower(), path.name)
 
     def test_version_matches_tag(self):
         tag = pkgbuild_value('echo "$_tag"')
@@ -247,7 +257,7 @@ class UpstreamTests(unittest.TestCase):
             directory = Path(tmp)
             (directory / 'src').mkdir()
             (directory / 'src/omarchy').symlink_to(Path(SOURCE).resolve(), target_is_directory=True)
-            for local in (SETUP, EXTRAS, VPN):
+            for local in (SETUP, EXTRAS, VPN, AGENTS, AGENT_START, *AGENTS.parent.glob('agents.completion.*')):
                 (directory / 'src' / local.name).symlink_to(local)
             (directory / 'tools').mkdir()
             mock = directory / 'tools/magick'
@@ -274,8 +284,11 @@ class UpstreamTests(unittest.TestCase):
             for path in ('etc/fastfetch/config.jsonc', 'etc/xdg/kitty/kitty.conf', 'usr/share/pixmaps/omarchy.png',
                          'usr/share/omarchy/default/bashrc', 'usr/share/omarchy/logo.txt'):
                 self.assertTrue((payload / path).is_file(), path)
-            for command in ('omarchy-update', 'omarchy-oncachy-setup', 'omarchy-oncachy-extras', 'vpn-switch'):
+            for command in ('omarchy-update', 'omarchy-oncachy-setup', 'omarchy-oncachy-extras', 'vpn-switch', 'agents'):
                 self.assertTrue((payload / 'usr/bin' / command).stat().st_mode & 0o111, command)
+            for path in ('usr/share/omarchy-oncachy/agent-start', 'usr/share/bash-completion/completions/agents',
+                         'usr/share/fish/vendor_completions.d/agents.fish'):
+                self.assertTrue((payload / path).is_file(), path)
             for forbidden in ('boot', 'etc/mkinitcpio.conf.d', 'etc/limine-entry-tool.d',
                               'etc/pacman.conf', 'etc/os-release', 'etc/sudoers.d', 'etc/pam.d',
                               'etc/sddm.conf', 'etc/sddm.conf.d', 'etc/snapper', 'etc/skel'):

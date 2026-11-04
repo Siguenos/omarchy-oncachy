@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# agents — gère les agents Claude lancés dans des sessions screen sur la VM pivot.
+#
+#   agents                    liste les agents (alias : agents ls)
+#   agents new [-d dossier] [--shell] <nom> [titre]
+#                             crée l'agent <nom> et y lance `claude --remote-control "<titre>"` (Remote Control actif,
+#                             nommé d'après le titre, sinon le nom) ; s'il existe déjà, s'y reconnecte.
+#                             -d : dossier de travail sur la VM (défaut : ~/.config/agents/dir, sinon ~ ; relatif à ~ ou absolu) ; --shell : shell seul, sans claude
+#   agents <nom>              se (re)connecte à l'agent <nom> (alias : agents attach <nom>)
+#   agents title <nom> <titre>  change le titre affiché pour <nom> (sans titre : reprend le nom)
+#   agents rm <nom>           oublie le titre de <nom> (n'arrête pas la session)
+#
+# <nom> = identifiant de la session screen (court, sans espace, ex. lot-serie).
+# <titre> = ce qui s'affiche dans la fenêtre du terminal (ex. « Lot/Série — ticket 123 »).
+# Config locale dans ~/.config/agents/ : host (user@hôte, obligatoire), dir (dossier par défaut), titles (« nom<TAB>titre »).
+# Côté VM, le hook Claude Code envoie une cloche (\a) sur Notification/Stop -> fenêtre « urgente ».
+set -euo pipefail
+
+case "${1:-}" in -h|--help|help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/agents"
+TITLES="$CONF/titles"
+mkdir -p "$CONF"; touch "$TITLES"
+
+die() { echo "agents: $*" >&2; exit 1; }
+
+# Machine distante (user@hôte) : $AGENTS_HOST, sinon la première ligne de ~/.config/agents/host.
+HOST="${AGENTS_HOST:-$(head -n1 "$CONF/host" 2>/dev/null || true)}"
+[ -n "$HOST" ] || die "machine distante non configurée : echo user@hôte > $CONF/host (ou export AGENTS_HOST)"
+# Dossier de travail par défaut sur la machine distante : $AGENTS_DIR, sinon ~/.config/agents/dir, sinon ~.
+DEFAULT_DIR="${AGENTS_DIR:-$(head -n1 "$CONF/dir" 2>/dev/null || true)}"
+DEFAULT_DIR="${DEFAULT_DIR:-.}"
+
+valid_name() { [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]] || die "nom invalide « $1 » (lettres, chiffres, . _ - uniquement)"; }
+
+get_title() { awk -F'\t' -v n="$1" '$1==n {print $2; exit}' "$TITLES"; }
+set_title() {
+  local tmp; tmp="$(mktemp)"
+  awk -F'\t' -v n="$1" '$1!=n' "$TITLES" > "$tmp"
+  [ -n "$2" ] && printf '%s\t%s\n' "$1" "$2" >> "$tmp"
+  mv "$tmp" "$TITLES"
+}
+
+# Sessions de la VM : « nom<TAB>état<TAB>date »
+remote_sessions() {
+  ssh "$HOST" screen -ls 2>/dev/null | awk '
+    /^\t[0-9]+\./ {
+      id=$1; sub(/^[0-9]+\./, "", id)
+      state=($0 ~ /Attached/) ? "connecté" : ($0 ~ /Detached/) ? "détaché" : "?"
+      date=$2; gsub(/[()]/, "", date)
+      printf "%s\t%s\t%s\n", id, state, date
+    }'
+}
+
+cmd_ls() {
+  local rows; rows="$(remote_sessions || true)"
+  if [ -z "$rows" ]; then echo "Aucun agent sur la VM."; return; fi
+  printf '%-22s %-10s %-12s %s\n' AGENT ÉTAT DEPUIS TITRE
+  while IFS=$'\t' read -r name state date; do
+    printf '%-22s %-10s %-12s %s\n' "$name" "$state" "$date" "$(get_title "$name")"
+  done <<< "$rows"
+}
+
+STARTER="/usr/share/omarchy-oncachy/agent-start"
+[ -f "$STARTER" ] || STARTER="$(dirname "$(readlink -f "$0")")/agent-start"
+
+agent_exists() { remote_sessions | cut -f1 | grep -qx "$1"; }
+
+connect() {  # connect <nom> : reprend la session existante et pose le titre de la fenêtre
+  local name="$1" title; valid_name "$name"
+  title="$(get_title "$name")"; title="${title:-$name}"
+  printf '\033]0;%s\007' "$title"
+  exec ssh -t "$HOST" screen -xRR -S "$name"
+}
+
+create() {  # create <nom> <dossier> <avec_claude 0|1> : crée la session, y lance claude en Remote Control
+  local name="$1" dir="$2" with_claude="$3" title b64
+  title="$(get_title "$name")"; title="${title:-$name}"
+  printf '\033]0;%s\007' "$title"
+  b64="$(printf %s "$title" | base64 -w0)"
+  # (ré)installe le lanceur sur la VM (idempotent) ; le shell de login de la VM est fish, d'où ce script bash.
+  ssh "$HOST" 'mkdir -p ~/.local/bin; cat > ~/.local/bin/agent-start; chmod +x ~/.local/bin/agent-start' < "$STARTER"
+  exec ssh -t "$HOST" '~/.local/bin/agent-start' "$name" "$dir" "$b64" "$with_claude"
+}
+
+cmd_new() {
+  local dir="$DEFAULT_DIR" with_claude=1
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -d) [ $# -ge 2 ] || die "-d demande un dossier"; dir="$2"; shift 2 ;;
+      --shell) with_claude=0; shift ;;
+      *) break ;;
+    esac
+  done
+  [ $# -ge 1 ] || die "usage : agents new [-d dossier] [--shell] <nom> [titre]"
+  local name="$1"; shift; valid_name "$name"
+  [ $# -ge 1 ] && set_title "$name" "$*"
+  if agent_exists "$name"; then connect "$name"; else create "$name" "$dir" "$with_claude"; fi
+}
+
+cmd="${1:-ls}"
+case "$cmd" in
+  ls|list)   cmd_ls ;;
+  _names)    remote_sessions | cut -f1 ;;   # utilisé par l'autocomplétion
+  new)       shift; cmd_new "$@" ;;
+  attach)    [ $# -ge 2 ] || die "usage : agents attach <nom>"
+             remote_sessions | cut -f1 | grep -qx "$2" || die "pas d'agent « $2 » sur la VM (agents ls ; agents new $2)"
+             connect "$2" ;;
+  title)     [ $# -ge 3 ] || die "usage : agents title <nom> <titre>"
+             valid_name "$2"; set_title "$2" "${*:3}"; echo "Titre de $2 : ${*:3}" ;;
+  rm)        [ $# -ge 2 ] || die "usage : agents rm <nom>"
+             set_title "$2" ""; echo "Titre de $2 oublié." ;;
+  -h|--help|help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *)         # raccourci : agents <nom>
+             remote_sessions | cut -f1 | grep -qx "$cmd" || die "pas d'agent « $cmd » (agents ls ; agents new $cmd [titre])"
+             connect "$cmd" ;;
+esac

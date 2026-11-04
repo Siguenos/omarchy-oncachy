@@ -45,3 +45,11 @@ if [[ -d $dir/extras ]]; then
     echo "Extras failed; run omarchy-oncachy-extras after the first login."
   rm -rf "${root:?}$extras"
 fi
+# Vivaldi comes with the extras: make it the default browser once, as install.sh does.
+# BROWSER and the desktop-specific list are masked as in omarchy-default-browser.
+if [[ -r $root/usr/share/applications/vivaldi-stable.desktop ]]; then
+  home=$(target getent passwd "$user" | cut -d: -f6)
+  target runuser -u "$user" -- env -u BROWSER XDG_CURRENT_DESKTOP= HOME="$home" \
+    xdg-settings set default-web-browser vivaldi-stable.desktop ||
+    echo "Could not set Vivaldi as the default browser."
+fi

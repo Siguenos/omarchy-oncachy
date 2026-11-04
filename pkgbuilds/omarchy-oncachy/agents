@@ -5,18 +5,21 @@
 #   agents new [-d dossier] [--shell] <nom> [titre]
 #                             crée l'agent <nom> et y lance `claude --remote-control "<titre>"` (Remote Control actif,
 #                             nommé d'après le titre, sinon le nom) ; s'il existe déjà, s'y reconnecte.
-#                             -d : dossier de travail sur la VM (défaut : ~/.config/agents/dir, sinon ~ ; relatif à ~ ou absolu) ; --shell : shell seul, sans claude
+#                             Dossier de travail sur la VM : -d <dossier> si donné ; sinon le dossier courant s'il est dans la racine
+#                             synchronisée (~/.config/agents/sync, même chemin des deux côtés) ; sinon ~/.config/agents/dir, sinon ~.
+#                             --shell : shell seul, sans claude
 #   agents <nom>              se (re)connecte à l'agent <nom> (alias : agents attach <nom>)
 #   agents title <nom> <titre>  change le titre affiché pour <nom> (sans titre : reprend le nom)
 #   agents rm <nom>           oublie le titre de <nom> (n'arrête pas la session)
 #
 # <nom> = identifiant de la session screen (court, sans espace, ex. lot-serie).
 # <titre> = ce qui s'affiche dans la fenêtre du terminal (ex. « Lot/Série — ticket 123 »).
-# Config locale dans ~/.config/agents/ : host (user@hôte, obligatoire), dir (dossier par défaut), titles (« nom<TAB>titre »).
+# Config locale dans ~/.config/agents/ : host (user@hôte, obligatoire), sync (racine synchronisée, ex. /home/moi/pro),
+# dir (dossier par défaut), titles (« nom<TAB>titre »).
 # Côté VM, le hook Claude Code envoie une cloche (\a) sur Notification/Stop -> fenêtre « urgente ».
 set -euo pipefail
 
-case "${1:-}" in -h|--help|help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case "${1:-}" in -h|--help|help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/agents"
 TITLES="$CONF/titles"
@@ -30,6 +33,9 @@ HOST="${AGENTS_HOST:-$(head -n1 "$CONF/host" 2>/dev/null || true)}"
 # Dossier de travail par défaut sur la machine distante : $AGENTS_DIR, sinon ~/.config/agents/dir, sinon ~.
 DEFAULT_DIR="${AGENTS_DIR:-$(head -n1 "$CONF/dir" 2>/dev/null || true)}"
 DEFAULT_DIR="${DEFAULT_DIR:-.}"
+# Racine synchronisée (même chemin sur les deux machines, ex. via Mutagen) : $AGENTS_SYNC, sinon ~/.config/agents/sync.
+SYNC_ROOT="${AGENTS_SYNC:-$(head -n1 "$CONF/sync" 2>/dev/null || true)}"
+SYNC_ROOT="${SYNC_ROOT%/}"
 
 valid_name() { [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]] || die "nom invalide « $1 » (lettres, chiffres, . _ - uniquement)"; }
 
@@ -43,17 +49,21 @@ set_title() {
 
 # Sessions de la VM : « nom<TAB>état<TAB>date »
 remote_sessions() {
-  ssh "$HOST" screen -ls 2>/dev/null | awk '
+  local out rc=0
+  out="$(ssh "$HOST" screen -ls 2>&1)" || rc=$?
+  # 255 = échec SSH (clé refusée, agent verrouillé, machine injoignable) : ne pas le confondre avec « aucun agent ».
+  [ "$rc" -ne 255 ] || die "connexion SSH à $HOST impossible : ${out##*$'\n'}"
+  awk '
     /^\t[0-9]+\./ {
       id=$1; sub(/^[0-9]+\./, "", id)
       state=($0 ~ /Attached/) ? "connecté" : ($0 ~ /Detached/) ? "détaché" : "?"
       date=$2; gsub(/[()]/, "", date)
       printf "%s\t%s\t%s\n", id, state, date
-    }'
+    }' <<< "$out"
 }
 
 cmd_ls() {
-  local rows; rows="$(remote_sessions || true)"
+  local rows; rows="$(remote_sessions)"
   if [ -z "$rows" ]; then echo "Aucun agent sur la VM."; return; fi
   printf '%-22s %-10s %-12s %s\n' AGENT ÉTAT DEPUIS TITRE
   while IFS=$'\t' read -r name state date; do
@@ -84,7 +94,7 @@ create() {  # create <nom> <dossier> <avec_claude 0|1> : crée la session, y lan
 }
 
 cmd_new() {
-  local dir="$DEFAULT_DIR" with_claude=1
+  local dir="" with_claude=1
   while [ $# -gt 0 ]; do
     case "$1" in
       -d) [ $# -ge 2 ] || die "-d demande un dossier"; dir="$2"; shift 2 ;;
@@ -93,6 +103,17 @@ cmd_new() {
     esac
   done
   [ $# -ge 1 ] || die "usage : agents new [-d dossier] [--shell] <nom> [titre]"
+  if [ -z "$dir" ]; then
+    dir="$DEFAULT_DIR"
+    # Dossier courant dans la racine synchronisée -> même chemin sur la machine distante.
+    if [ -n "$SYNC_ROOT" ] && { [ "$PWD" = "$SYNC_ROOT" ] || [[ "$PWD" == "$SYNC_ROOT"/* ]]; }; then
+      if [[ "$PWD" =~ ^[A-Za-z0-9._/~-]+$ ]] && ! ssh "$HOST" test -d "$PWD" 2>/dev/null; then
+        echo "agents: $PWD n'existe pas encore sur la machine distante (sync en cours ?) -> dossier par défaut ($DEFAULT_DIR)" >&2
+      else
+        dir="$PWD"
+      fi
+    fi
+  fi
   local name="$1"; shift; valid_name "$name"
   [ $# -ge 1 ] && set_title "$name" "$*"
   if agent_exists "$name"; then connect "$name"; else create "$name" "$dir" "$with_claude"; fi
@@ -110,7 +131,7 @@ case "$cmd" in
              valid_name "$2"; set_title "$2" "${*:3}"; echo "Titre de $2 : ${*:3}" ;;
   rm)        [ $# -ge 2 ] || die "usage : agents rm <nom>"
              set_title "$2" ""; echo "Titre de $2 oublié." ;;
-  -h|--help|help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//' ;;
   *)         # raccourci : agents <nom>
              remote_sessions | cut -f1 | grep -qx "$cmd" || die "pas d'agent « $cmd » (agents ls ; agents new $cmd [titre])"
              connect "$cmd" ;;

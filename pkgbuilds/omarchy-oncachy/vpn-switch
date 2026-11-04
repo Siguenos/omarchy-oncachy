@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Sélecteur VPN WireGuard (NetworkManager) : un seul VPN actif à la fois.
+#   vpn-switch <nom>   coupe les VPN WireGuard actifs puis monte <nom>
+#   vpn-switch off     coupe tout
+#   vpn-switch list    liste les VPN WireGuard ; * = actif
+set -uo pipefail
+
+wg_all()    { nmcli -t -f NAME,TYPE connection show         | awk -F: '$2=="wireguard"{print $1}'; }
+wg_active() { nmcli -t -f NAME,TYPE connection show --active | awk -F: '$2=="wireguard"{print $1}'; }
+note()      { notify-send --app-name=VPN --icon=network-vpn "VPN" "$1" 2>/dev/null || true; echo "$1"; }
+
+target="${1:-list}"
+
+case "$target" in
+  list)
+    act="$(wg_active)"
+    while IFS= read -r n; do
+      if grep -qxF -- "$n" <<<"$act"; then echo "* $n"; else echo "  $n"; fi
+    done < <(wg_all)
+    exit 0 ;;
+  off)
+    while IFS= read -r n; do [ -n "$n" ] && nmcli connection down "$n" >/dev/null 2>&1; done < <(wg_active)
+    note "VPN coupé"; exit 0 ;;
+esac
+
+wg_all | grep -qxF -- "$target" || { note "VPN inconnu : $target"; exit 1; }
+
+# Couper tous les autres VPN WireGuard actifs
+while IFS= read -r n; do
+  [ -n "$n" ] && [ "$n" != "$target" ] && nmcli connection down "$n" >/dev/null 2>&1
+done < <(wg_active)
+
+# Déjà actif : rien d'autre à faire
+wg_active | grep -qxF -- "$target" && { note "VPN $target déjà actif"; exit 0; }
+
+if nmcli connection up "$target" >/dev/null 2>&1; then note "VPN $target connecté"
+else note "Échec de connexion à $target"; exit 1; fi

@@ -4,7 +4,7 @@
 pkgbase=omarchy-oncachy
 pkgname=(omarchy-oncachy omarchy-oncachy-desktop)
 pkgver=4.0.6
-pkgrel=4
+pkgrel=5
 # Upstream tag and the commit it pointed to when reviewed (bin/bump-omarchy.sh).
 _tag=v4.0.6
 _commit=237f1b4071a0bff2296c6d740ba2b9fd695ebfa0
@@ -16,8 +16,10 @@ options=(!debug)
 # Local files live in this repository, so they are not checksummed.
 source=("omarchy::git+https://github.com/omacom/omarchy.git#commit=$_commit"
         omarchy-oncachy-setup
-        omarchy-oncachy-extras)
+        omarchy-oncachy-extras
+        vpn-switch)
 sha256sums=('f89ae5e85d18d8364f5c89ae05cd0fd170a8c4c93dd62e396b2b0a7fa5be4428'
+            'SKIP'
             'SKIP'
             'SKIP')
 
@@ -127,6 +129,7 @@ UPGRADE
 
   install -Dm755 "$srcdir/omarchy-oncachy-setup" "$pkgdir/usr/bin/omarchy-oncachy-setup"
   install -Dm755 "$srcdir/omarchy-oncachy-extras" "$pkgdir/usr/bin/omarchy-oncachy-extras"
+  install -Dm755 "$srcdir/vpn-switch" "$pkgdir/usr/bin/vpn-switch"
 }
 
 package_omarchy-oncachy-desktop() {

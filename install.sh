@@ -89,5 +89,10 @@ if (( extras )); then
   extras_args=()
   (( !yes )) || extras_args=(--yes)
   omarchy-oncachy-extras "${extras_args[@]}" "$ROOT/extras/extras.packages"
+  # Vivaldi comes with the extras. Set once here, so a later choice is not overridden.
+  # BROWSER and the desktop-specific list are masked as in omarchy-default-browser.
+  if [[ -r /usr/share/applications/vivaldi-stable.desktop ]]; then
+    env -u BROWSER XDG_CURRENT_DESKTOP= xdg-settings set default-web-browser vivaldi-stable.desktop || true
+  fi
 fi
 echo "Done. Log: $log"

@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PKGBUILD = ROOT / 'pkgbuilds/omarchy-oncachy/PKGBUILD'
 SETUP = ROOT / 'pkgbuilds/omarchy-oncachy/omarchy-oncachy-setup'
 EXTRAS = ROOT / 'pkgbuilds/omarchy-oncachy/omarchy-oncachy-extras'
+VPN = ROOT / 'pkgbuilds/omarchy-oncachy/vpn-switch'
 # Upstream checkout at the pinned commit, e.g. .cache/build/omarchy-oncachy/src/omarchy
 # after `bin/build.sh --nobuild`.
 SOURCE = os.environ.get('OMARCHY_TEST_SOURCE')
@@ -246,7 +247,7 @@ class UpstreamTests(unittest.TestCase):
             directory = Path(tmp)
             (directory / 'src').mkdir()
             (directory / 'src/omarchy').symlink_to(Path(SOURCE).resolve(), target_is_directory=True)
-            for local in (SETUP, EXTRAS):
+            for local in (SETUP, EXTRAS, VPN):
                 (directory / 'src' / local.name).symlink_to(local)
             (directory / 'tools').mkdir()
             mock = directory / 'tools/magick'
@@ -273,7 +274,7 @@ class UpstreamTests(unittest.TestCase):
             for path in ('etc/fastfetch/config.jsonc', 'etc/xdg/kitty/kitty.conf', 'usr/share/pixmaps/omarchy.png',
                          'usr/share/omarchy/default/bashrc', 'usr/share/omarchy/logo.txt'):
                 self.assertTrue((payload / path).is_file(), path)
-            for command in ('omarchy-update', 'omarchy-oncachy-setup', 'omarchy-oncachy-extras'):
+            for command in ('omarchy-update', 'omarchy-oncachy-setup', 'omarchy-oncachy-extras', 'vpn-switch'):
                 self.assertTrue((payload / 'usr/bin' / command).stat().st_mode & 0o111, command)
             for forbidden in ('boot', 'etc/mkinitcpio.conf.d', 'etc/limine-entry-tool.d',
                               'etc/pacman.conf', 'etc/os-release', 'etc/sudoers.d', 'etc/pam.d',

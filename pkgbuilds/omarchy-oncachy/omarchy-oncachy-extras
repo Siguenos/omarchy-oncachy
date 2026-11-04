@@ -29,6 +29,33 @@ list_packages() { sed 's/#.*//; s/[[:space:]]//g; /^$/d' "$1"; }
 PRIVATE_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-oncachy/private
 PRIVATE_CONF=${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-oncachy/private-repo
 PRIVATE_BIN=${XDG_BIN_HOME:-$HOME/.local/bin}
+# Create this file to silence the reminder below when you do not use a private repository.
+PRIVATE_NO_WARN=${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-oncachy/no-private
+
+# True when no private repository is set up and the reminder was not silenced.
+private_missing() { [[ ! -f $PRIVATE_CONF && ! -f $PRIVATE_NO_WARN ]]; }
+
+# A big, hard to miss reminder at the end of a run (colours only on a terminal).
+private_warning() {
+  local y='' b='' r=''
+  if [[ -t 1 ]]; then y=$'\e[1;33m' b=$'\e[1m' r=$'\e[0m'; fi
+  cat <<WARNING_EOF
+
+${y}        /\\
+       /  \\       ${b}!!  NO PRIVATE PROFILE ON THIS MACHINE  !!${r}${y}
+      / !! \\
+     /  !!  \\     Your private scripts and packages are NOT installed here.
+    /   !!   \\
+   /          \\   Fix it now:
+  /     ..     \\
+ /______________\\    ${b}omarchy-oncachy-extras private-setup${r}${y}
+
+                   It asks for the URL of your private repository
+                   (needs the GitHub CLI, logged in: gh auth login).
+                   Not using one?  touch $PRIVATE_NO_WARN${r}
+
+WARNING_EOF
+}
 
 # A GitHub repository URL: https://github.com/OWNER/REPO[.git]
 valid_private_url() { [[ $1 =~ ^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+(\.git)?/?$ ]]; }
@@ -196,3 +223,6 @@ fi
 if [[ $mode == install && $list == "$LIST_URL" && -f $PRIVATE_CONF ]] && command -v gh >/dev/null; then
   if sync_private "$(head -n1 "$PRIVATE_CONF")"; then install_private_extras; fi
 fi
+
+# ... and reminds you when there is none, so that forgetting it does not go unnoticed.
+if [[ $mode == install && $list == "$LIST_URL" ]] && private_missing; then private_warning; fi

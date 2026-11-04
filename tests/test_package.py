@@ -45,6 +45,23 @@ class ScriptTests(unittest.TestCase):
             result = run('bash', '-c', 'source "$1"; valid_private_url "$2"', 'bash', str(EXTRAS), url)
             self.assertEqual(result.returncode == 0, valid, url)
 
+    def test_private_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {**os.environ, 'XDG_CONFIG_HOME': tmp, 'XDG_DATA_HOME': tmp}
+            script = 'source "$1"; if private_missing; then private_warning; else echo SILENT; fi'
+            shown = run('bash', '-c', script, 'bash', str(EXTRAS), env=env)
+            self.assertEqual(shown.returncode, 0, shown.stderr)
+            self.assertIn('omarchy-oncachy-extras private-setup', shown.stdout)
+            self.assertIn('NO PRIVATE PROFILE', shown.stdout)
+            self.assertNotIn('\x1b', shown.stdout)  # no colours when not on a terminal
+            conf = Path(tmp) / 'omarchy-oncachy'
+            conf.mkdir()
+            (conf / 'no-private').touch()
+            self.assertEqual(run('bash', '-c', script, 'bash', str(EXTRAS), env=env).stdout.strip(), 'SILENT')
+            (conf / 'no-private').unlink()
+            (conf / 'private-repo').write_text('https://github.com/me/repo\n')
+            self.assertEqual(run('bash', '-c', script, 'bash', str(EXTRAS), env=env).stdout.strip(), 'SILENT')
+
     def test_agents_has_no_private_defaults(self):
         # The repository is public: the remote machine comes from the user's own configuration.
         for path in (AGENTS, AGENT_START, *AGENTS.parent.glob('agents.completion.*')):

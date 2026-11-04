@@ -133,6 +133,22 @@ class SetupTests(unittest.TestCase):
             self.assertEqual((Path(tmp) / 'sddm.conf.d/10-omarchy-theme.conf').read_text(),
                              '[Theme]\nCurrent=omarchy\n')
 
+    def test_limine_entry(self):
+        esp = 'a68aa079-88bd-485e-a1df-12ea34dac556'
+        listing = ('BootCurrent: 0005\nBootOrder: 0005,0006,0001\n'
+                   'Boot0001* Linux Boot Manager\tHD(2,GPT,8c7f7147,0x800,0x200000)/\\EFI\\systemd\\systemd-bootx64.efi\n'
+                   'Boot0005* Limine\tHD(6,GPT,cbcdb443,0x800,0x400000)/\\EFI\\limine\\limine_x64.efi\n'
+                   f'Boot0006* Limine\tHD(3,GPT,{esp},0x800,0x400000)/\\EFI\\limine\\limine_x64.efi\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp) / 'efibootmgr'
+            fake.write_text(f"#!/bin/sh\nprintf '%s' '{listing}'\n")
+            fake.chmod(0o755)
+            for label, expected in (('Limine', '0006'), ('Omarchy', '')):
+                result = run('bash', '-c', 'source "$1"; limine_entry "$2" "$3"', 'bash', str(SETUP),
+                             label, esp.upper(), env={**os.environ, 'PATH': f'{tmp}:{os.environ["PATH"]}'})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), expected)
+
     def test_system_setup_keeps_chosen_session(self):
         with tempfile.TemporaryDirectory() as tmp:
             state = Path(tmp) / 'sddm/state.conf'

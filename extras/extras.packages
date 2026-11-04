@@ -43,6 +43,11 @@ rclone
 kopia-ui-bin
 cups
 cups-browsed
+gvfs
+gvfs-smb
+gvfs-wsdd
+gvfs-nfs
+gvfs-mtp
 
 # Applications
 vivaldi
@@ -50,6 +55,9 @@ vivaldi-ffmpeg-codecs
 bitwarden
 bitwarden-cli
 obsidian
+nextcloud-client
+vlc
+vlc-plugins-all
 tasks-bin
 supersonic-desktop-bin
 artcraft-launcher-bin

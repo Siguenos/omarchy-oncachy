@@ -1,7 +1,7 @@
     - id: Omarchy
       name: "Omarchy"
       platform: "desktop"
-      description: "Omarchy is an opinionated, keyboard-driven Hyprland desktop with themes and a ready-to-use set of applications. Installed from the [omarchy] and [omarchy-oncachy] repositories; CachyOS keeps its kernel, drivers and bootloader."
-      description[fr]: "Omarchy est un bureau Hyprland piloté au clavier, avec ses thèmes et une sélection d'applications prêtes à l'emploi. Installé depuis les dépôts [omarchy] et [omarchy-oncachy] ; CachyOS garde son noyau, ses pilotes et son chargeur d'amorçage."
+      description: "Omarchy is an opinionated, keyboard-driven Hyprland desktop with themes and a ready-to-use set of applications. Installed from the [omarchy] and [omcachy] repositories; CachyOS keeps its kernel, drivers and bootloader."
+      description[fr]: "Omarchy est un bureau Hyprland piloté au clavier, avec ses thèmes et une sélection d'applications prêtes à l'emploi. Installé depuis les dépôts [omarchy] et [omcachy] ; CachyOS garde son noyau, ses pilotes et son chargeur d'amorçage."
       screenshot: "/etc/calamares/images/omarchy.webp"
 

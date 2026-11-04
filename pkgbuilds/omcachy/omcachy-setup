@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Set up the Omarchy desktop on CachyOS after installing omarchy-oncachy-desktop.
+# Set up the Omarchy desktop on CachyOS after installing omcachy-desktop.
 #
-#   omarchy-oncachy-setup            as the user: system part through sudo, then the user part
-#   omarchy-oncachy-setup --user     as the user: user part only
-#   omarchy-oncachy-setup --system [USER]
+#   omcachy-setup            as the user: system part through sudo, then the user part
+#   omcachy-setup --user     as the user: user part only
+#   omcachy-setup --system [USER]
 #                                    as root: system part, then the user part for USER
 #                                    (used by the ISO installer in the target chroot)
 #   --force                          redo the user part even if it already ran
@@ -11,10 +11,10 @@ set -eEuo pipefail
 
 OMARCHY_PATH=/usr/share/omarchy
 # Overridable for tests.
-VCONSOLE=${OMARCHY_ONCACHY_VCONSOLE:-/etc/vconsole.conf}
-X11_KEYBOARD=${OMARCHY_ONCACHY_X11_KEYBOARD:-/etc/X11/xorg.conf.d/00-keyboard.conf}
-SDDM_STATE=${OMARCHY_ONCACHY_SDDM_STATE:-/var/lib/sddm/state.conf}
-SDDM_THEME_CONF=${OMARCHY_ONCACHY_SDDM_THEME_CONF:-/etc/sddm.conf.d/10-omarchy-theme.conf}
+VCONSOLE=${OMCACHY_VCONSOLE:-/etc/vconsole.conf}
+X11_KEYBOARD=${OMCACHY_X11_KEYBOARD:-/etc/X11/xorg.conf.d/00-keyboard.conf}
+SDDM_STATE=${OMCACHY_SDDM_STATE:-/var/lib/sddm/state.conf}
+SDDM_THEME_CONF=${OMCACHY_SDDM_THEME_CONF:-/etc/sddm.conf.d/10-omarchy-theme.conf}
 SESSION=/usr/share/wayland-sessions/omarchy.desktop
 
 usage() { sed -n '2,10s/^# \{0,1\}//p' "$0"; }
@@ -77,14 +77,16 @@ system_setup() {
     printf '[Theme]\nCurrent=omarchy\n' > "$SDDM_THEME_CONF"
   fi
 
-  if [[ -z ${OMARCHY_ONCACHY_NO_SYSTEMCTL:-} ]]; then
+  if [[ -z ${OMCACHY_NO_SYSTEMCTL:-} ]]; then
     systemctl enable sddm.service NetworkManager.service
     systemctl set-default graphical.target
   fi
 }
 
 user_setup() {
-  local force=$1 state="$HOME/.local/state/omarchy-oncachy" backup layout variant
+  local force=$1 state="$HOME/.local/state/omcachy" backup layout variant
+  # Former name of this project: keep its state (setup-done, backups).
+  if [[ -d $HOME/.local/state/omarchy-oncachy && ! -e $state ]]; then mv "$HOME/.local/state/omarchy-oncachy" "$state"; fi
   if [[ -e $state/setup-done ]] && (( !force )); then
     echo "Omarchy user setup already done for $USER (use --force to redo it)."
     return

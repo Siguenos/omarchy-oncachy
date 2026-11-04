@@ -38,31 +38,31 @@ if [[ -z $iso ]]; then
   (cd "$out_dir" && sha256sum -c "${iso##*/}.sha256")
 fi
 
-name="omarchy-oncachy-$(date +%Y.%m.%d)-x86_64.iso"
+name="omcachy-$(date +%Y.%m.%d)-x86_64.iso"
 remote <<'EOF'
 sudo pacman -S --needed --noconfirm squashfs-tools xorriso gnupg >/dev/null
-rm -rf ~/omarchy-oncachy-iso && mkdir -p ~/omarchy-oncachy-iso/src
+rm -rf ~/omcachy-iso && mkdir -p ~/omcachy-iso/src
 EOF
 # The working tree, including uncommitted changes, without build output.
 git -C "$ROOT_DIR" ls-files -z --cached --others --exclude-standard |
-  tar -C "$ROOT_DIR" --null -T - -cf - | ssh "${ssh_args[@]}" "$host" tar -C omarchy-oncachy-iso/src -xf -
-scp "${ssh_args[@]}" -q "$iso" "$host:omarchy-oncachy-iso/cachyos.iso"
+  tar -C "$ROOT_DIR" --null -T - -cf - | ssh "${ssh_args[@]}" "$host" tar -C omcachy-iso/src -xf -
+scp "${ssh_args[@]}" -q "$iso" "$host:omcachy-iso/cachyos.iso"
 remote "$name" "$extras" <<'EOF'
 set -e
 name=$1 extras=$2
-cd ~/omarchy-oncachy-iso
+cd ~/omcachy-iso
 args=()
 if (( extras )); then
   sudo pacman -S --needed --noconfirm base-devel git >/dev/null
-  bash src/pkgbuilds/omarchy-oncachy/omarchy-oncachy-extras --build aur src/extras/extras.packages 2>&1 |
+  bash src/pkgbuilds/omcachy/omcachy-extras --build aur src/extras/extras.packages 2>&1 |
     tee build-aur.log | grep -E '^(== Building|Skipped|Extras done)'
   args=(--extras aur)
 fi
 sudo src/iso/remaster.sh "${args[@]}" cachyos.iso "$name"
 EOF
-scp "${ssh_args[@]}" -q "$host:omarchy-oncachy-iso/$name" "$host:omarchy-oncachy-iso/$name.sha256" "$out_dir/"
+scp "${ssh_args[@]}" -q "$host:omcachy-iso/$name" "$host:omcachy-iso/$name.sha256" "$out_dir/"
 remote <<'EOF'
-rm -rf ~/omarchy-oncachy-iso
+rm -rf ~/omcachy-iso
 EOF
 (cd "$out_dir" && sha256sum -c "$name.sha256")
 echo "ISO: $out_dir/$name"

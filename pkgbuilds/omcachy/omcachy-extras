@@ -2,12 +2,12 @@
 # Install the applications of an extras list, skipping the ones that fail:
 # repository packages with pacman, the others built from the AUR with makepkg.
 #
-#   omarchy-oncachy-extras [--yes] [LIST]      as the user: install what is missing
-#   omarchy-oncachy-extras --build DIR [LIST]  as the user: only build the AUR
+#   omcachy-extras [--yes] [LIST]      as the user: install what is missing
+#   omcachy-extras --build DIR [LIST]  as the user: only build the AUR
 #                                              packages into DIR (ISO build)
-#   omarchy-oncachy-extras --prebuilt DIR [LIST]
+#   omcachy-extras --prebuilt DIR [LIST]
 #                                              as root: AUR packages from DIR (ISO install)
-#   omarchy-oncachy-extras private-setup [URL] as the user: optionally add your own private GitHub
+#   omcachy-extras private-setup [URL] as the user: optionally add your own private GitHub
 #                                              repository (needs gh, logged in): its extras.packages
 #                                              is installed too and its scripts/ are linked into
 #                                              ~/.local/bin. Not part of the public setup or the ISO.
@@ -17,7 +17,7 @@
 # Once private-setup has been run, a plain run also updates and installs the private list.
 set -eEuo pipefail
 
-LIST_URL=https://raw.githubusercontent.com/Siguenos/omarchy-oncachy/main/extras/extras.packages
+LIST_URL=https://raw.githubusercontent.com/Siguenos/omcachy/main/extras/extras.packages
 AUR_URL=https://aur.archlinux.org
 
 usage() { sed -n '2,18s/^# \{0,1\}//p' "$0"; }
@@ -26,11 +26,19 @@ usage() { sed -n '2,18s/^# \{0,1\}//p' "$0"; }
 list_packages() { sed 's/#.*//; s/[[:space:]]//g; /^$/d' "$1"; }
 
 # Optional private repository (see private-setup): where it is cloned and where its URL is remembered.
-PRIVATE_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-oncachy/private
-PRIVATE_CONF=${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-oncachy/private-repo
+PRIVATE_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/omcachy/private
+PRIVATE_CONF=${XDG_CONFIG_HOME:-$HOME/.config}/omcachy/private-repo
 PRIVATE_BIN=${XDG_BIN_HOME:-$HOME/.local/bin}
 # Create this file to silence the reminder below when you do not use a private repository.
-PRIVATE_NO_WARN=${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-oncachy/no-private
+PRIVATE_NO_WARN=${XDG_CONFIG_HOME:-$HOME/.config}/omcachy/no-private
+
+# The project was called omarchy-oncachy before: move what it left in the user's directories.
+migrate_legacy_dirs() {
+  local base
+  for base in "${XDG_CONFIG_HOME:-$HOME/.config}" "${XDG_DATA_HOME:-$HOME/.local/share}" "${XDG_STATE_HOME:-$HOME/.local/state}"; do
+    if [[ -d $base/omarchy-oncachy && ! -e $base/omcachy ]]; then mv "$base/omarchy-oncachy" "$base/omcachy"; fi
+  done
+}
 
 # True when no private repository is set up and the reminder was not silenced.
 private_missing() { [[ ! -f $PRIVATE_CONF && ! -f $PRIVATE_NO_WARN ]]; }
@@ -48,7 +56,7 @@ ${y}        /\\
     /   !!   \\
    /          \\   Fix it now:
   /     ..     \\
- /______________\\    ${b}omarchy-oncachy-extras private-setup${r}${y}
+ /______________\\    ${b}omcachy-extras private-setup${r}${y}
 
                    It asks for the URL of your private repository
                    (needs the GitHub CLI, logged in: gh auth login).
@@ -76,6 +84,8 @@ sync_private() {
     [[ -f $file ]] || continue
     target=$PRIVATE_BIN/${file##*/}
     if [[ -L $target && $(readlink -f -- "$target") == "$(readlink -f -- "$file")" ]]; then continue; fi
+    # Link made before the rename (the clone moved with it).
+    if [[ -L $target && $(readlink -- "$target") == */omarchy-oncachy/private/* ]]; then rm -f -- "$target"; fi
     if [[ -e $target || -L $target ]]; then
       echo "Not linking ${file##*/}: $target already exists" >&2
       continue
@@ -140,6 +150,7 @@ build_aur_once() {
 }
 
 [[ ${BASH_SOURCE[0]} == "$0" ]] || return 0
+migrate_legacy_dirs
 
 mode=install yes=0 dir='' list=$LIST_URL
 self_args=()

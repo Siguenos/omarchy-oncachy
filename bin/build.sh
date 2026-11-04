@@ -7,5 +7,5 @@ export PKGDEST=${PKGDEST:-$ROOT/out}
 export SRCDEST=${SRCDEST:-$ROOT/.cache/sources}
 export BUILDDIR=${BUILDDIR:-$ROOT/.cache/build}
 mkdir -p "$PKGDEST" "$SRCDEST" "$BUILDDIR"
-cd "$ROOT/pkgbuilds/omarchy-oncachy"
+cd "$ROOT/pkgbuilds/omcachy"
 makepkg --cleanbuild --force "$@"

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Calamares job, before the packages step: make omarchy-oncachy-desktop
+# Calamares job, before the packages step: make omcachy-desktop
 # installable in the target. [omarchy] goes after the other repositories so
-# the other desktops keep CachyOS's packages; omarchy-oncachy-finish moves it
+# the other desktops keep CachyOS's packages; omcachy-finish moves it
 # first when Omarchy was chosen.
-# Usage: omarchy-oncachy-repos ROOT
+# Usage: omcachy-repos ROOT
 exec 2>&1
 set -eEuo pipefail
 root=$1
-dir=/etc/calamares/omarchy-oncachy
+dir=/etc/calamares/omcachy
 source "$dir/repos.sh"
 conf=$root/etc/pacman.conf
 gpgdir=$root/etc/pacman.d/gnupg
@@ -15,13 +15,13 @@ gpgdir=$root/etc/pacman.d/gnupg
 for key in "$dir"/keys/*.asc; do
   pacman-key --gpgdir "$gpgdir" --add "$key"
 done
-for fingerprint in "$OMARCHY_KEY" "$ONCACHY_KEY"; do
+for fingerprint in "$OMARCHY_KEY" "$OMCACHY_KEY"; do
   pacman-key --gpgdir "$gpgdir" --lsign-key "$fingerprint"
 done
 
-awk -v name=omarchy-oncachy -v server="$ONCACHY_SERVER" -v siglevel='Required' \
+awk -v name=omcachy -v server="$OMCACHY_SERVER" -v siglevel='Required' \
   -f "$dir/pacman-config.awk" "$conf" > "$conf.new"
 awk -v name=omarchy -v server="$OMARCHY_SERVER" -v siglevel='Required DatabaseOptional' -v position=last \
   -f "$dir/pacman-config.awk" "$conf.new" > "$conf"
 rm "$conf.new"
-echo "Added [omarchy-oncachy] and [omarchy] to $conf"
+echo "Added [omcachy] and [omarchy] to $conf"

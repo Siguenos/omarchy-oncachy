@@ -5,7 +5,7 @@
 # Runs as root, with squashfs-tools, xorriso and gnupg.
 # Usage: iso/remaster.sh [--extras AUR_DIR] CACHYOS_ISO OUTPUT_ISO
 #   --extras AUR_DIR   also install extras/extras.packages with Omarchy, the AUR
-#                      ones from AUR_DIR (omarchy-oncachy-extras --build AUR_DIR)
+#                      ones from AUR_DIR (omcachy-extras --build AUR_DIR)
 set -eEuo pipefail
 ISO_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 SFS=/arch/x86_64/airootfs.sfs
@@ -25,7 +25,7 @@ for tool in unsquashfs mksquashfs xorriso gpg; do
 done
 omarchy_key=$(sed -n 's/^OMARCHY_KEY=//p' "$ISO_DIR/../install.sh")
 
-work=$(mktemp -d -p /var/tmp omarchy-oncachy-iso.XXXXXX)
+work=$(mktemp -d -p /var/tmp omcachy-iso.XXXXXX)
 trap 'rm -rf "$work"' EXIT
 echo "Unpacking $SFS"
 xorriso -osirrox on -indev "$input" -extract "$SFS" "$work/airootfs.sfs" 2>/dev/null

@@ -24,4 +24,4 @@ jobs:
             echo "${package##*/}: $(du -h "$package" | cut -f1), $(bsdtar -tf "$package" | wc -l) entries"
           done
       - name: Run the tests
-        run: sudo -u builder env OMARCHY_TEST_SOURCE=.cache/build/omarchy-oncachy/src/omarchy python3 tests/test_package.py
+        run: sudo -u builder env OMARCHY_TEST_SOURCE=.cache/build/omcachy/src/omarchy python3 tests/test_package.py

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Pin the packages to another Omarchy release: version, tag, commit, checksum
-# and the omarchy-oncachy-desktop dependencies.
+# and the omcachy-desktop dependencies.
 # Usage: bin/bump-omarchy.sh [VERSION]   (default: latest stable vX.Y.Z tag)
 set -eEuo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-PKGBUILD=$SCRIPT_DIR/../pkgbuilds/omarchy-oncachy/PKGBUILD
+PKGBUILD=$SCRIPT_DIR/../pkgbuilds/omcachy/PKGBUILD
 OMARCHY_REPO=https://github.com/omacom/omarchy.git
 old_tag=$(source "$PKGBUILD" && echo "$_tag")
 old_commit=$(source "$PKGBUILD" && echo "$_commit")

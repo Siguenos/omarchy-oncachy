@@ -71,7 +71,7 @@ cmd_ls() {
   done <<< "$rows"
 }
 
-STARTER="/usr/share/omarchy-oncachy/agent-start"
+STARTER="/usr/share/omcachy/agent-start"
 [ -f "$STARTER" ] || STARTER="$(dirname "$(readlink -f "$0")")/agent-start"
 
 agent_exists() { remote_sessions | cut -f1 | grep -qx "$1"; }

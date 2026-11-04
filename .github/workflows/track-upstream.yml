@@ -27,7 +27,7 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          tag() { (source pkgbuilds/omarchy-oncachy/PKGBUILD && echo "${_tag#v}"); }
+          tag() { (source pkgbuilds/omcachy/PKGBUILD && echo "${_tag#v}"); }
           old=$(tag)
           bin/bump-omarchy.sh "$VERSION"
           if git diff --quiet; then
@@ -58,7 +58,7 @@ jobs:
         id: test
         if: steps.build.outcome == 'success'
         continue-on-error: true
-        run: sudo -u builder env OMARCHY_TEST_SOURCE=.cache/build/omarchy-oncachy/src/omarchy python3 tests/test_package.py
+        run: sudo -u builder env OMARCHY_TEST_SOURCE=.cache/build/omcachy/src/omarchy python3 tests/test_package.py
       - name: Write the review notes
         if: steps.bump.outputs.changed == 'true'
         env:

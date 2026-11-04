@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Calamares job, after the users and shell setup: finish an Omarchy install,
-# or remove the repositories omarchy-oncachy-repos added when another desktop
+# or remove the repositories omcachy-repos added when another desktop
 # was chosen.
-# Usage: omarchy-oncachy-finish ROOT USER
+# Usage: omcachy-finish ROOT USER
 exec 2>&1
 set -eEuo pipefail
 root=$1 user=$2
-dir=/etc/calamares/omarchy-oncachy
+dir=/etc/calamares/omcachy
 source "$dir/repos.sh"
 conf=$root/etc/pacman.conf
 
@@ -17,9 +17,9 @@ repository() {
 }
 target() { chroot "$root" "$@"; }
 
-if ! target pacman -Q omarchy-oncachy-desktop >/dev/null 2>&1; then
+if ! target pacman -Q omcachy-desktop >/dev/null 2>&1; then
   repository omarchy -v remove=1
-  repository omarchy-oncachy -v remove=1
+  repository omcachy -v remove=1
   echo "Omarchy not installed: removed its repositories."
   exit 0
 fi
@@ -35,14 +35,14 @@ fi
 
 # Omarchy's shell configuration is for bash (CachyOS's installer picks fish).
 target chsh -s /bin/bash "$user"
-target omarchy-oncachy-setup --system "$user"
+target omcachy-setup --system "$user"
 # Extras embedded at build time: repository packages from the mirrors, AUR
 # packages built beforehand. Failures are skipped and listed in the log.
 if [[ -d $dir/extras ]]; then
-  extras=/var/tmp/omarchy-oncachy-extras
+  extras=/var/tmp/omcachy-extras
   cp -r "$dir/extras" "$root$extras"
-  target bash "$extras/omarchy-oncachy-extras" --prebuilt "$extras/aur" "$extras/extras.packages" ||
-    echo "Extras failed; run omarchy-oncachy-extras after the first login."
+  target bash "$extras/omcachy-extras" --prebuilt "$extras/aur" "$extras/extras.packages" ||
+    echo "Extras failed; run omcachy-extras after the first login."
   rm -rf "${root:?}$extras"
 fi
 # Vivaldi comes with the extras: make it the default browser once, as install.sh does.

@@ -4,7 +4,7 @@
 # the jobs that set it up. Safe to run again on a customized root.
 # Usage: iso/customize.sh [--extras AUR_DIR] AIROOTFS OMARCHY_KEY_FILE
 #   --extras AUR_DIR   also install extras/extras.packages with Omarchy, the AUR
-#                      ones from AUR_DIR (omarchy-oncachy-extras --build)
+#                      ones from AUR_DIR (omcachy-extras --build)
 #
 # CachyOS Hello upgrades the installer package before starting it, which
 # restores its configuration: the live root gets a copy of this kit under KIT
@@ -12,8 +12,8 @@
 set -eEuo pipefail
 ISO_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT_DIR=$(dirname -- "$ISO_DIR")
-KIT=/usr/lib/omarchy-oncachy-iso
-HOOK=/etc/pacman.d/hooks/90-omarchy-oncachy-calamares.hook
+KIT=/usr/lib/omcachy-iso
+HOOK=/etc/pacman.d/hooks/90-omcachy-calamares.hook
 
 usage() { sed -n '2,7s/^# \{0,1\}//p' "$0"; }
 aur_dir=''
@@ -43,7 +43,7 @@ if [[ $(realpath -m -- "$airootfs$KIT") != "$ROOT_DIR" ]]; then
   install -d "$airootfs$KIT"/{iso,bin,keys}
   cp -a "$ISO_DIR/customize.sh" "$ISO_DIR/calamares" "$airootfs$KIT/iso/"
   install -m 644 "$ROOT_DIR/bin/pacman-config.awk" "$airootfs$KIT/bin/"
-  install -m 644 "$ROOT_DIR/keys/omarchy-oncachy.asc" "$airootfs$KIT/keys/"
+  install -m 644 "$ROOT_DIR/keys/omcachy.asc" "$airootfs$KIT/keys/"
   install -m 644 "$ROOT_DIR/install.sh" "$airootfs$KIT/"
   install -m 644 "$omarchy_key" "$airootfs$KIT/omarchy.asc"
   install -d "$airootfs${HOOK%/*}"
@@ -62,23 +62,23 @@ HOOK
 fi
 
 # Files the installer jobs use.
-data=$calamares/omarchy-oncachy
+data=$calamares/omcachy
 install -d "$data/keys"
-install -m 644 "$ROOT_DIR/keys/omarchy-oncachy.asc" "$data/keys/omarchy-oncachy.asc"
+install -m 644 "$ROOT_DIR/keys/omcachy.asc" "$data/keys/omcachy.asc"
 install -m 644 "$omarchy_key" "$data/keys/omarchy.asc"
 install -m 644 "$ROOT_DIR/bin/pacman-config.awk" "$data/pacman-config.awk"
 # Same repositories and keys as install.sh.
-grep -E '^(OMARCHY|ONCACHY)_(SERVER|KEY)=' "$ROOT_DIR/install.sh" > "$data/repos.sh"
+grep -E '^(OMARCHY|OMCACHY)_(SERVER|KEY)=' "$ROOT_DIR/install.sh" > "$data/repos.sh"
 (( $(wc -l < "$data/repos.sh") == 4 )) || { echo "Repository settings not found in install.sh" >&2; exit 1; }
 # The extras stay from the first run when the hook runs this again.
 if [[ -n $aur_dir ]]; then
   rm -rf "$data/extras"
   install -d "$data/extras/aur"
   install -m 644 "$ROOT_DIR/extras/extras.packages" "$data/extras/extras.packages"
-  install -m 755 "$ROOT_DIR/pkgbuilds/omarchy-oncachy/omarchy-oncachy-extras" "$data/extras/omarchy-oncachy-extras"
+  install -m 755 "$ROOT_DIR/pkgbuilds/omcachy/omcachy-extras" "$data/extras/omcachy-extras"
   find "$aur_dir" -maxdepth 1 -name '*.pkg.tar.*' -exec install -m 644 -t "$data/extras/aur" {} +
 fi
-for script in omarchy-oncachy-repos omarchy-oncachy-finish; do
+for script in omcachy-repos omcachy-finish; do
   install -m 755 "$ISO_DIR/calamares/$script" "$calamares/scripts/$script"
 done
 for config in shellprocess_omarchy_repos.conf shellprocess_omarchy_finish.conf; do

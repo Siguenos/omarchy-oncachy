@@ -1,4 +1,4 @@
-# omarchy-oncachy
+# omcachy
 
 [Omarchy](https://github.com/omacom/omarchy)'s desktop on [CachyOS](https://cachyos.org),
 as regular pacman packages built from the official Omarchy sources.
@@ -13,8 +13,8 @@ Unofficial community project, not affiliated with Omarchy or CachyOS.
 
 | Package | Contents |
 |---|---|
-| `omarchy-oncachy` | Omarchy's `bin/`, `config/`, `default/`, `shell/`, `themes/`… under `/usr/share/omarchy`, the Omarchy session, and `omarchy-oncachy-setup` |
-| `omarchy-oncachy-desktop` | Meta package: Omarchy's application list (`install/omarchy-base.packages`) minus Plymouth, kernel-modules-hook and tldr (tealdeer instead) |
+| `omcachy` | Omarchy's `bin/`, `config/`, `default/`, `shell/`, `themes/`… under `/usr/share/omarchy`, the Omarchy session, and `omcachy-setup` |
+| `omcachy-desktop` | Meta package: Omarchy's application list (`install/omarchy-base.packages`) minus Plymouth, kernel-modules-hook and tldr (tealdeer instead) |
 
 Omarchy's own repository (`[omarchy]`, pkgs.omarchy.org) provides Hyprland, quickshell and its
 desktop tools; it is added ahead of the CachyOS repositories.
@@ -24,17 +24,17 @@ desktop tools; it is added ahead of the CachyOS repositories.
 Start from a CachyOS install with Hyprland or without a desktop, on your normal user:
 
 ```bash
-git clone https://github.com/Siguenos/omarchy-oncachy.git
-cd omarchy-oncachy
+git clone https://github.com/Siguenos/omcachy.git
+cd omcachy
 ./install.sh            # or --yes for no questions
 ```
 
 `install.sh` takes a Snapper snapshot when available, adds the repositories, installs
-`omarchy-oncachy-desktop`, then runs `omarchy-oncachy-setup`:
+`omcachy-desktop`, then runs `omcachy-setup`:
 
 - as root: keyboard layout for Hyprland (`XKBLAYOUT` in `/etc/vconsole.conf`, from the X11
   layout), Omarchy as SDDM's default session, SDDM and NetworkManager enabled;
-- as the user: backup of `~/.config` to `~/.local/state/omarchy-oncachy/`, Omarchy configs,
+- as the user: backup of `~/.config` to `~/.local/state/omcachy/`, Omarchy configs,
   matching fcitx5 keyboard profile, then Omarchy's `omarchy-provision-user`.
 
 Reboot and log in to the Omarchy session. Updates come with `sudo pacman -Syu` (or `omarchy update`).
@@ -42,31 +42,31 @@ Reboot and log in to the Omarchy session. Updates come with `sudo pacman -Syu` (
 ### Extra applications
 
 [`extras/extras.packages`](extras/extras.packages) lists applications to add on top of Omarchy.
-`omarchy-oncachy-extras` installs the ones that are missing: repository packages with pacman,
+`omcachy-extras` installs the ones that are missing: repository packages with pacman,
 the others built from the AUR with makepkg. Failures are skipped and listed at the end.
 
 ```bash
-omarchy-oncachy-extras            # the list on this repository's main branch
-omarchy-oncachy-extras FILE|URL   # another list
+omcachy-extras            # the list on this repository's main branch
+omcachy-extras FILE|URL   # another list
 ./install.sh --extras             # during the first install, with the clone's list
 ```
 
 The list is downloaded each time, so adding an application is a push to `main`, then
-`omarchy-oncachy-extras` on each machine: no package release needed.
+`omcachy-extras` on each machine: no package release needed.
 
 ## Installer ISO
 
 `iso/` turns the official CachyOS desktop ISO into one whose Calamares installer offers Omarchy
-next to the other desktops. Choosing it installs `omarchy-oncachy-desktop`, puts `[omarchy]` ahead of
-the CachyOS repositories, sets the user up with `omarchy-oncachy-setup` (bash as login shell) and,
+next to the other desktops. Choosing it installs `omcachy-desktop`, puts `[omarchy]` ahead of
+the CachyOS repositories, sets the user up with `omcachy-setup` (bash as login shell) and,
 for ISOs built with `--extras`, installs the extra applications (AUR packages built with the ISO,
 failures skipped and listed). Partitioning, encryption,
 bootloader and drivers stay CachyOS's.
 
 ```bash
 # As root on CachyOS/Arch (squashfs-tools, xorriso, gnupg):
-omarchy-oncachy-extras --build aur extras/extras.packages   # optional: AUR packages, as a user
-sudo iso/remaster.sh [--extras aur] cachyos-desktop-linux-YYMMDD.iso omarchy-oncachy-YYYY.MM.DD-x86_64.iso
+omcachy-extras --build aur extras/extras.packages   # optional: AUR packages, as a user
+sudo iso/remaster.sh [--extras aur] cachyos-desktop-linux-YYMMDD.iso omcachy-YYYY.MM.DD-x86_64.iso
 # Or from a machine without root, on a CachyOS VM reachable over SSH with sudo
 # (downloads and checks the latest CachyOS ISO unless --iso is given):
 iso/build-in-vm.sh [--extras] [--iso FILE] [--ssh-config FILE] HOST OUTPUT_DIR
@@ -83,19 +83,27 @@ carries a pacman hook that adds Omarchy again after that upgrade. The ISO is not
 (here after `[options]`, ahead of the other repositories):
 
 ```bash
-sudo pacman-key --add keys/omarchy-oncachy.asc
+sudo pacman-key --add keys/omcachy.asc
 sudo pacman-key --lsign-key F5CC831F86EEDEF2988D958F9C2D1A8DCDB97DAB
 ```
 
 ```ini
-[omarchy-oncachy]
+[omcachy]
 SigLevel = Required
-Server = https://github.com/Siguenos/omarchy-oncachy/releases/download/repo
+Server = https://github.com/Siguenos/omcachy/releases/download/repo
 ```
 
 Packages and database are signed by the subkey `02AA039EC307C7DA1C9AF018468F92E58933DC1F` of
-`keys/omarchy-oncachy.asc`. The *Publish* workflow rebuilds, signs and uploads them to the
+`keys/omcachy.asc`. The *Publish* workflow rebuilds, signs and uploads them to the
 `repo` release whenever `pkgbuilds/` changes on `main`.
+
+### Former name
+
+The project used to be called `omarchy-oncachy`. `omcachy` replaces the packages of that name, renames
+`[omarchy-oncachy]` to `[omcachy]` in `/etc/pacman.conf` when it is installed, and `omcachy-setup` /
+`omcachy-extras` move `~/.config`, `~/.local/share` and `~/.local/state` `omarchy-oncachy/` to `omcachy/`.
+The old command names stay as links, and the release also serves the database as `omarchy-oncachy.db`
+for machines not yet migrated: a plain `sudo pacman -Syu` is enough.
 
 ## Build
 
@@ -104,7 +112,7 @@ bin/build.sh --nodeps                 # packages in out/
 ./install.sh --packages out           # install them instead of the repository's
 ```
 
-`pkgbuilds/omarchy-oncachy/patches/*.patch` are applied to the Omarchy sources in `prepare()`.
+`pkgbuilds/omcachy/patches/*.patch` are applied to the Omarchy sources in `prepare()`.
 
 ## Follow Omarchy releases
 
@@ -127,7 +135,7 @@ A given version can be requested from the workflow's *Run workflow* button (prer
 
 ```bash
 bin/build.sh --nobuild
-OMARCHY_TEST_SOURCE=.cache/build/omarchy-oncachy/src/omarchy python3 tests/test_package.py
+OMARCHY_TEST_SOURCE=.cache/build/omcachy/src/omarchy python3 tests/test_package.py
 ```
 
 ## Credits

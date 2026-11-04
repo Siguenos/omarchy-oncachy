@@ -4,16 +4,16 @@
 #   --yes            no questions; pacman picks its default providers
 #   --extras         also install the applications of extras/extras.packages (AUR included)
 #   --packages DIR   install packages built with bin/build.sh (e.g. out/)
-#                    instead of the [omarchy-oncachy] repository
+#                    instead of the [omcachy] repository
 set -eEuo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 # Omarchy's own repository supplies Hyprland, quickshell and its desktop tools.
 OMARCHY_SERVER='https://pkgs.omarchy.org/stable/$arch'
 OMARCHY_KEY=40DFB630FF42BCFFB047046CF0134EE680CAC571
 # This project's repository, published as the GitHub release "repo", and the
-# key that signs it (keys/omarchy-oncachy.asc).
-ONCACHY_SERVER='https://github.com/Siguenos/omarchy-oncachy/releases/download/repo'
-ONCACHY_KEY=F5CC831F86EEDEF2988D958F9C2D1A8DCDB97DAB
+# key that signs it (keys/omcachy.asc).
+OMCACHY_SERVER='https://github.com/Siguenos/omcachy/releases/download/repo'
+OMCACHY_KEY=F5CC831F86EEDEF2988D958F9C2D1A8DCDB97DAB
 
 usage() { sed -n '2,7s/^# \{0,1\}//p' "$0"; }
 yes=0 extras=0 packages=''
@@ -38,13 +38,13 @@ for package in gnome-shell plasma-desktop omarchy omarchy-settings; do
   fi
 done
 if [[ -n $packages ]]; then
-  local_packages=("$packages"/omarchy-oncachy-[0-9]*.pkg.tar.zst "$packages"/omarchy-oncachy-desktop-[0-9]*.pkg.tar.zst)
+  local_packages=("$packages"/omcachy-[0-9]*.pkg.tar.zst "$packages"/omcachy-desktop-[0-9]*.pkg.tar.zst)
   for file in "${local_packages[@]}"; do
     [[ -f $file ]] || { echo "Missing package in $packages: run bin/build.sh first." >&2; exit 1; }
   done
 fi
 
-state="$HOME/.local/state/omarchy-oncachy"
+state="$HOME/.local/state/omcachy"
 mkdir -p "$state"
 log="$state/install-$(date +%Y%m%d-%H%M%S).log"
 exec > >(tee -a "$log") 2>&1
@@ -57,7 +57,7 @@ if (( !yes )); then
 fi
 
 if sudo snapper -c root get-config >/dev/null 2>&1; then
-  sudo snapper -c root create --description "Before omarchy-oncachy"
+  sudo snapper -c root create --description "Before omcachy"
 fi
 sudo cp -a /etc/pacman.conf "$state/pacman.conf.$(date +%Y%m%d-%H%M%S)"
 sudo pacman-key --recv-keys "$OMARCHY_KEY" --keyserver keys.openpgp.org
@@ -66,9 +66,9 @@ new_config=$(mktemp)
 awk -v name=omarchy -v server="$OMARCHY_SERVER" -v siglevel='Required DatabaseOptional' \
   -f "$ROOT/bin/pacman-config.awk" /etc/pacman.conf > "$new_config"
 if [[ -z $packages ]]; then
-  sudo pacman-key --add "$ROOT/keys/omarchy-oncachy.asc"
-  sudo pacman-key --lsign-key "$ONCACHY_KEY"
-  awk -v name=omarchy-oncachy -v server="$ONCACHY_SERVER" -v siglevel='Required' \
+  sudo pacman-key --add "$ROOT/keys/omcachy.asc"
+  sudo pacman-key --lsign-key "$OMCACHY_KEY"
+  awk -v name=omcachy -v server="$OMCACHY_SERVER" -v siglevel='Required' \
     -f "$ROOT/bin/pacman-config.awk" "$new_config" > "$new_config.2"
   mv "$new_config.2" "$new_config"
 fi
@@ -82,13 +82,13 @@ if [[ -n $packages ]]; then
   # pacman resolves the dependencies from the configured repositories.
   sudo pacman -U --needed "${confirm[@]}" "${local_packages[@]}"
 else
-  sudo pacman -S --needed "${confirm[@]}" omarchy-oncachy-desktop
+  sudo pacman -S --needed "${confirm[@]}" omcachy-desktop
 fi
-omarchy-oncachy-setup
+omcachy-setup
 if (( extras )); then
   extras_args=()
   (( !yes )) || extras_args=(--yes)
-  omarchy-oncachy-extras "${extras_args[@]}" "$ROOT/extras/extras.packages"
+  omcachy-extras "${extras_args[@]}" "$ROOT/extras/extras.packages"
   # Vivaldi comes with the extras. Set once here, so a later choice is not overridden.
   # BROWSER and the desktop-specific list are masked as in omarchy-default-browser.
   if [[ -r /usr/share/applications/vivaldi-stable.desktop ]]; then

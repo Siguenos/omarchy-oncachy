@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     container: cachyos/cachyos:latest
     env:
-      # Public signing subkey of keys/omarchy-oncachy.asc; its secret half is GPG_PRIVATE_KEY.
+      # Public signing subkey of keys/omcachy.asc; its secret half is GPG_PRIVATE_KEY.
       SIGNING_KEY: 02AA039EC307C7DA1C9AF018468F92E58933DC1F
     steps:
       - name: Install build tools
@@ -26,7 +26,7 @@ jobs:
           chown -R builder "$GITHUB_WORKSPACE"
           sudo -u builder bin/build.sh --nodeps --noconfirm
       - name: Run the tests
-        run: sudo -u builder env OMARCHY_TEST_SOURCE=.cache/build/omarchy-oncachy/src/omarchy python3 tests/test_package.py
+        run: sudo -u builder env OMARCHY_TEST_SOURCE=.cache/build/omcachy/src/omarchy python3 tests/test_package.py
       - name: Sign and publish
         env:
           GH_TOKEN: ${{ github.token }}

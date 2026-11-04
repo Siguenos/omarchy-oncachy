@@ -1,17 +1,18 @@
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PKGBUILD = ROOT / 'pkgbuilds/omarchy-oncachy/PKGBUILD'
-SETUP = ROOT / 'pkgbuilds/omarchy-oncachy/omarchy-oncachy-setup'
-EXTRAS = ROOT / 'pkgbuilds/omarchy-oncachy/omarchy-oncachy-extras'
-VPN = ROOT / 'pkgbuilds/omarchy-oncachy/vpn-switch'
-AGENTS = ROOT / 'pkgbuilds/omarchy-oncachy/agents'
-AGENT_START = ROOT / 'pkgbuilds/omarchy-oncachy/agent-start'
-# Upstream checkout at the pinned commit, e.g. .cache/build/omarchy-oncachy/src/omarchy
+PKGBUILD = ROOT / 'pkgbuilds/omcachy/PKGBUILD'
+SETUP = ROOT / 'pkgbuilds/omcachy/omcachy-setup'
+EXTRAS = ROOT / 'pkgbuilds/omcachy/omcachy-extras'
+VPN = ROOT / 'pkgbuilds/omcachy/vpn-switch'
+AGENTS = ROOT / 'pkgbuilds/omcachy/agents'
+AGENT_START = ROOT / 'pkgbuilds/omcachy/agent-start'
+# Upstream checkout at the pinned commit, e.g. .cache/build/omcachy/src/omarchy
 # after `bin/build.sh --nobuild`.
 SOURCE = os.environ.get('OMARCHY_TEST_SOURCE')
 
@@ -28,7 +29,7 @@ def pkgbuild_value(expression):
 
 class ScriptTests(unittest.TestCase):
     def test_bash_syntax(self):
-        for path in [*ROOT.glob('bin/*.sh'), *ROOT.glob('iso/*.sh'), *ROOT.glob('iso/calamares/omarchy-oncachy-*'),
+        for path in [*ROOT.glob('bin/*.sh'), *ROOT.glob('iso/*.sh'), *ROOT.glob('iso/calamares/omcachy-*'),
                      ROOT / 'install.sh', PKGBUILD, SETUP, EXTRAS, AGENTS, AGENT_START]:
             result = run('bash', '-n', str(path))
             self.assertEqual(result.returncode, 0, f'{path}: {result.stderr}')
@@ -51,16 +52,60 @@ class ScriptTests(unittest.TestCase):
             script = 'source "$1"; if private_missing; then private_warning; else echo SILENT; fi'
             shown = run('bash', '-c', script, 'bash', str(EXTRAS), env=env)
             self.assertEqual(shown.returncode, 0, shown.stderr)
-            self.assertIn('omarchy-oncachy-extras private-setup', shown.stdout)
+            self.assertIn('omcachy-extras private-setup', shown.stdout)
             self.assertIn('NO PRIVATE PROFILE', shown.stdout)
             self.assertNotIn('\x1b', shown.stdout)  # no colours when not on a terminal
-            conf = Path(tmp) / 'omarchy-oncachy'
+            conf = Path(tmp) / 'omcachy'
             conf.mkdir()
             (conf / 'no-private').touch()
             self.assertEqual(run('bash', '-c', script, 'bash', str(EXTRAS), env=env).stdout.strip(), 'SILENT')
             (conf / 'no-private').unlink()
             (conf / 'private-repo').write_text('https://github.com/me/repo\n')
             self.assertEqual(run('bash', '-c', script, 'bash', str(EXTRAS), env=env).stdout.strip(), 'SILENT')
+
+    def test_install_scriptlet_renames_repository(self):
+        install = ROOT / 'pkgbuilds/omcachy/omcachy.install'
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = Path(tmp) / 'pacman.conf'
+            conf.write_text('[options]\n\n[omarchy-oncachy]\nSigLevel = Required\n'
+                            'Server = https://github.com/Siguenos/omarchy-oncachy/releases/download/repo\n'
+                            '\n[core]\nInclude = /etc/pacman.d/mirrorlist\n')
+            env = {**os.environ, 'OMCACHY_PACMAN_CONF': str(conf)}
+            for hook in ('post_upgrade', 'post_install'):  # the second run finds nothing to change
+                result = run('bash', '-c', 'source "$1"; ' + hook, 'bash', str(install), env=env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            text = conf.read_text()
+            self.assertIn('[omcachy]', text)
+            self.assertIn('Siguenos/omcachy/releases', text)
+            self.assertNotIn('oncachy', text)
+            self.assertIn('[core]', text)
+
+    def test_legacy_names_are_replaced(self):
+        text = PKGBUILD.read_text()
+        main, desktop = text.split('package_omcachy-desktop()')
+        for body, old in ((main, 'omarchy-oncachy'), (desktop, 'omarchy-oncachy-desktop')):
+            for field in ('replaces', 'conflicts'):
+                match = re.search(rf'^\s*{field}=\(([^)]*)\)', body, re.M)
+                self.assertTrue(match and old in match.group(1).split(), f'{field} {old}')
+        self.assertIn('install=omcachy.install', main)
+
+    def test_legacy_directories_move_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / '.config/omarchy-oncachy').mkdir(parents=True)
+            (home / '.config/omarchy-oncachy/private-repo').write_text('https://github.com/me/repo\n')
+            (home / '.local/share/omarchy-oncachy/private/scripts').mkdir(parents=True)
+            (home / '.local/state/omarchy-oncachy').mkdir(parents=True)
+            (home / '.local/state/omarchy-oncachy/setup-done').touch()
+            env = {**os.environ, 'HOME': tmp}
+            for var in ('XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME'):
+                env.pop(var, None)
+            result = run('bash', '-c', 'source "$1"; migrate_legacy_dirs; migrate_legacy_dirs', 'bash', str(EXTRAS), env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((home / '.config/omcachy/private-repo').is_file())
+            self.assertTrue((home / '.local/share/omcachy/private/scripts').is_dir())
+            self.assertTrue((home / '.local/state/omcachy/setup-done').is_file())
+            self.assertFalse((home / '.config/omarchy-oncachy').exists())
 
     def test_agents_has_no_private_defaults(self):
         # The repository is public: the remote machine comes from the user's own configuration.
@@ -133,11 +178,11 @@ class ScriptTests(unittest.TestCase):
 class SetupTests(unittest.TestCase):
     def setup_shell(self, tmp, script):
         env = {**os.environ,
-               'OMARCHY_ONCACHY_VCONSOLE': str(Path(tmp) / 'vconsole.conf'),
-               'OMARCHY_ONCACHY_X11_KEYBOARD': str(Path(tmp) / '00-keyboard.conf'),
-               'OMARCHY_ONCACHY_SDDM_STATE': str(Path(tmp) / 'sddm/state.conf'),
-               'OMARCHY_ONCACHY_SDDM_THEME_CONF': str(Path(tmp) / 'sddm.conf.d/10-omarchy-theme.conf'),
-               'OMARCHY_ONCACHY_NO_SYSTEMCTL': '1'}
+               'OMCACHY_VCONSOLE': str(Path(tmp) / 'vconsole.conf'),
+               'OMCACHY_X11_KEYBOARD': str(Path(tmp) / '00-keyboard.conf'),
+               'OMCACHY_SDDM_STATE': str(Path(tmp) / 'sddm/state.conf'),
+               'OMCACHY_SDDM_THEME_CONF': str(Path(tmp) / 'sddm.conf.d/10-omarchy-theme.conf'),
+               'OMCACHY_NO_SYSTEMCTL': '1'}
         return run('bash', '-c', 'source "$1"; ' + script, 'bash', str(SETUP), env=env)
 
     def keyboard(self, vconsole=None, x11=None):
@@ -237,20 +282,20 @@ class IsoTests(unittest.TestCase):
             chooser = (modules / 'packagechooser_desktop.conf').read_text()
             self.assertEqual(chooser.count('- id: Omarchy'), 1)
             self.assertLess(chooser.index('- id: Omarchy'), chooser.index('- id: KDE-Desktop'))
-            self.assertEqual((modules / 'netinstall.yaml').read_text().count('- omarchy-oncachy-desktop'), 1)
+            self.assertEqual((modules / 'netinstall.yaml').read_text().count('- omcachy-desktop'), 1)
             self.assertNotIn('https://', (modules / 'netinstall.conf').read_text())
             sequence = (root / 'usr/share/calamares/settings_online.conf').read_text().split('sequence:')[1].split()
             self.assertEqual(sequence[sequence.index('packages@online') - 2], 'shellprocess@omarchy_repos')
             self.assertEqual(sequence[sequence.index('shellprocess') + 2], 'shellprocess@omarchy_finish')
-            data = root / 'etc/calamares/omarchy-oncachy'
+            data = root / 'etc/calamares/omcachy'
             extras = data / 'extras'
             self.assertTrue((extras / 'aur/gitkraken-1-1-x86_64.pkg.tar.zst').is_file())
             self.assertIn('jetbrains-toolbox', (extras / 'extras.packages').read_text())
-            self.assertTrue((extras / 'omarchy-oncachy-extras').stat().st_mode & 0o111)
-            self.assertIn('ONCACHY_SERVER=', (data / 'repos.sh').read_text())
-            kit = root / 'usr/lib/omarchy-oncachy-iso'
+            self.assertTrue((extras / 'omcachy-extras').stat().st_mode & 0o111)
+            self.assertIn('OMCACHY_SERVER=', (data / 'repos.sh').read_text())
+            kit = root / 'usr/lib/omcachy-iso'
             self.assertTrue((kit / 'iso/customize.sh').stat().st_mode & 0o111)
-            hook = (root / 'etc/pacman.d/hooks/90-omarchy-oncachy-calamares.hook').read_text()
+            hook = (root / 'etc/pacman.d/hooks/90-omcachy-calamares.hook').read_text()
             self.assertIn('Target = cachyos-calamares*', hook)
             # The live system runs the kit again after the installer package is upgraded.
             (modules / 'packagechooser_desktop.conf').write_text('items:\n    - id: KDE-Desktop\n')
@@ -269,12 +314,12 @@ class UpstreamTests(unittest.TestCase):
     def test_desktop_depends_match_upstream_list(self):
         expected = run('bash', str(ROOT / 'bin/desktop-depends.sh'),
                        str(Path(SOURCE) / 'install/omarchy-base.packages')).stdout.split()
-        depends = pkgbuild_value('package_omarchy-oncachy-desktop; printf "%s\\n" "${depends[@]}"').split()
-        self.assertEqual(depends[0], 'omarchy-oncachy=' + pkgbuild_value('echo "$pkgver-$pkgrel"'))
+        depends = pkgbuild_value('package_omcachy-desktop; printf "%s\\n" "${depends[@]}"').split()
+        self.assertEqual(depends[0], 'omcachy=' + pkgbuild_value('echo "$pkgver-$pkgrel"'))
         self.assertEqual(depends[1:], expected, 'run bin/sync-desktop-depends.sh')
 
     def test_setup_sources_exist(self):
-        # Files omarchy-oncachy-setup copies from /usr/share/omarchy (the skel seed).
+        # Files omcachy-setup copies from /usr/share/omarchy (the skel seed).
         for path in ('config/hypr', 'default/bashrc', 'icon.txt', 'logo.txt', 'default/tensaku/state.toml',
                      'default/hypr/toggles/flags.lua', 'default/nautilus-python/extensions',
                      'bin/omarchy-provision-user', 'bin/omarchy-refresh-applications', 'default/hypr/input.lua'):
@@ -294,9 +339,9 @@ class UpstreamTests(unittest.TestCase):
             mock.write_text('#!/bin/bash\noutput=${!#}\n: > "${output#PNG32:}"\n')
             mock.chmod(0o755)
             env = {**os.environ, 'srcdir': str(directory / 'src'), 'pkgdir': str(directory / 'pkg'),
-                   'pkgname': 'omarchy-oncachy',
+                   'pkgname': 'omcachy',
                    'PATH': str(directory / 'tools') + ':' + os.environ['PATH']}
-            result = run('bash', '-euo', 'pipefail', '-c', 'source "$1"; package_omarchy-oncachy',
+            result = run('bash', '-euo', 'pipefail', '-c', 'source "$1"; package_omcachy',
                          'bash', str(PKGBUILD), env=env)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             payload = directory / 'pkg'
@@ -313,9 +358,9 @@ class UpstreamTests(unittest.TestCase):
             for path in ('etc/fastfetch/config.jsonc', 'etc/xdg/kitty/kitty.conf', 'usr/share/pixmaps/omarchy.png',
                          'usr/share/omarchy/default/bashrc', 'usr/share/omarchy/logo.txt'):
                 self.assertTrue((payload / path).is_file(), path)
-            for command in ('omarchy-update', 'omarchy-oncachy-setup', 'omarchy-oncachy-extras', 'vpn-switch', 'agents'):
+            for command in ('omarchy-update', 'omcachy-setup', 'omcachy-extras', 'vpn-switch', 'agents'):
                 self.assertTrue((payload / 'usr/bin' / command).stat().st_mode & 0o111, command)
-            for path in ('usr/share/omarchy-oncachy/agent-start', 'usr/share/bash-completion/completions/agents',
+            for path in ('usr/share/omcachy/agent-start', 'usr/share/bash-completion/completions/agents',
                          'usr/share/fish/vendor_completions.d/agents.fish'):
                 self.assertTrue((payload / path).is_file(), path)
             for forbidden in ('boot', 'etc/mkinitcpio.conf.d', 'etc/limine-entry-tool.d',

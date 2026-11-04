@@ -1,0 +1,11 @@
+# The project was called omarchy-oncachy before: move an existing pacman.conf to the new
+# repository name. The release serves the database under both names (bin/publish-repo.sh).
+migrate_repository() {
+  local conf=${OMCACHY_PACMAN_CONF:-/etc/pacman.conf}
+  grep -qs '^\[omarchy-oncachy\]' "$conf" || return 0
+  sed -i 's/^\[omarchy-oncachy\]/[omcachy]/; s|Siguenos/omarchy-oncachy/|Siguenos/omcachy/|' "$conf"
+  echo "pacman.conf: repository [omarchy-oncachy] renamed to [omcachy]."
+}
+
+post_install() { migrate_repository; }
+post_upgrade() { migrate_repository; }

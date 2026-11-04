@@ -7,18 +7,80 @@
 #                                              packages into DIR (ISO build)
 #   omarchy-oncachy-extras --prebuilt DIR [LIST]
 #                                              as root: AUR packages from DIR (ISO install)
+#   omarchy-oncachy-extras private-setup [URL] as the user: optionally add your own private GitHub
+#                                              repository (needs gh, logged in): its extras.packages
+#                                              is installed too and its scripts/ are linked into
+#                                              ~/.local/bin. Not part of the public setup or the ISO.
 #
 # LIST is a file or an http(s) URL, by default the list on the project's main
 # branch, so new entries pushed there are picked up without a package update.
+# Once private-setup has been run, a plain run also updates and installs the private list.
 set -eEuo pipefail
 
 LIST_URL=https://raw.githubusercontent.com/Siguenos/omarchy-oncachy/main/extras/extras.packages
 AUR_URL=https://aur.archlinux.org
 
-usage() { sed -n '2,13s/^# \{0,1\}//p' "$0"; }
+usage() { sed -n '2,18s/^# \{0,1\}//p' "$0"; }
 
 # Print the package names of a list: one per line, '#' starts a comment.
 list_packages() { sed 's/#.*//; s/[[:space:]]//g; /^$/d' "$1"; }
+
+# Optional private repository (see private-setup): where it is cloned and where its URL is remembered.
+PRIVATE_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/omarchy-oncachy/private
+PRIVATE_CONF=${XDG_CONFIG_HOME:-$HOME/.config}/omarchy-oncachy/private-repo
+PRIVATE_BIN=${XDG_BIN_HOME:-$HOME/.local/bin}
+
+# A GitHub repository URL: https://github.com/OWNER/REPO[.git]
+valid_private_url() { [[ $1 =~ ^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+(\.git)?/?$ ]]; }
+
+# Clone (or update) the private repository and link its scripts/ into PRIVATE_BIN, never over a
+# file that is not already one of its links. Does not install packages (see install_private_extras).
+sync_private() {
+  local url=$1 file target
+  if [[ -d $PRIVATE_DIR/.git ]]; then
+    # gh is the credential helper: the repository is private and cloned over https.
+    git -c credential.helper='!gh auth git-credential' -C "$PRIVATE_DIR" pull --ff-only -q || { echo "Cannot update $PRIVATE_DIR" >&2; return 1; }
+  else
+    mkdir -p "$(dirname "$PRIVATE_DIR")"
+    gh repo clone "$url" "$PRIVATE_DIR" -- -q || { echo "Cannot clone $url" >&2; return 1; }
+  fi
+  mkdir -p "$PRIVATE_BIN"
+  for file in "$PRIVATE_DIR"/scripts/*; do
+    [[ -f $file ]] || continue
+    target=$PRIVATE_BIN/${file##*/}
+    if [[ -L $target && $(readlink -f -- "$target") == "$(readlink -f -- "$file")" ]]; then continue; fi
+    if [[ -e $target || -L $target ]]; then
+      echo "Not linking ${file##*/}: $target already exists" >&2
+      continue
+    fi
+    chmod +x "$file"
+    ln -s "$file" "$target"
+    echo "Linked $target"
+  done
+}
+
+private_setup() {
+  local url=${1:-}
+  command -v gh >/dev/null || { echo "private-setup needs the GitHub CLI (gh)." >&2; return 1; }
+  gh auth status >/dev/null 2>&1 || { echo "private-setup needs gh logged in: run 'gh auth login'." >&2; return 1; }
+  if [[ -z $url && -f $PRIVATE_CONF ]]; then url=$(head -n1 "$PRIVATE_CONF"); fi
+  if [[ -z $url ]]; then
+    read -rp "URL of your private GitHub repository (https://github.com/OWNER/REPO): " url
+  fi
+  valid_private_url "$url" || { echo "Not a GitHub repository URL: $url" >&2; return 1; }
+  sync_private "$url" || return 1
+  mkdir -p "$(dirname "$PRIVATE_CONF")"
+  printf '%s\n' "$url" > "$PRIVATE_CONF"
+  echo "Private repository ready ($url)."
+  install_private_extras
+}
+
+# Install the private list, if there is one: same options as this run.
+install_private_extras() {
+  [[ -f $PRIVATE_DIR/extras.packages ]] || return 0
+  echo "== Private extras"
+  "$0" "${self_args[@]}" "$PRIVATE_DIR/extras.packages"
+}
 
 as_root() { if (( EUID == 0 )); then "$@"; else sudo "$@"; fi; }
 
@@ -53,9 +115,11 @@ build_aur_once() {
 [[ ${BASH_SOURCE[0]} == "$0" ]] || return 0
 
 mode=install yes=0 dir='' list=$LIST_URL
+self_args=()
+[[ ${1:-} != private-setup ]] || { shift; (( EUID != 0 )) || { echo "Run as your normal user." >&2; exit 1; }; private_setup "${1:-}"; exit; }
 while (( $# )); do
   case $1 in
-    --yes) yes=1 ;;
+    --yes) yes=1; self_args+=(--yes) ;;
     --build|--prebuilt)
       [[ -n ${2:-} ]] || { usage >&2; exit 2; }
       mode=${1#--} dir=$(realpath -m -- "$2"); shift ;;
@@ -126,4 +190,9 @@ if (( ${#failed[@]} )); then
   echo "Skipped, could not be installed or built: ${failed[*]}"
 else
   echo "Extras done."
+fi
+
+# A plain run (default public list) also refreshes the private repository, if one was set up.
+if [[ $mode == install && $list == "$LIST_URL" && -f $PRIVATE_CONF ]] && command -v gh >/dev/null; then
+  if sync_private "$(head -n1 "$PRIVATE_CONF")"; then install_private_extras; fi
 fi

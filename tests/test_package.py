@@ -33,6 +33,18 @@ class ScriptTests(unittest.TestCase):
             result = run('bash', '-n', str(path))
             self.assertEqual(result.returncode, 0, f'{path}: {result.stderr}')
 
+    def test_private_repository_url(self):
+        for url, valid in (('https://github.com/me/omcachy-private', True),
+                           ('https://github.com/me/omcachy-private.git', True),
+                           ('https://github.com/me/repo/', True),
+                           ('http://github.com/me/repo', False),
+                           ('https://example.com/me/repo', False),
+                           ('https://github.com/me', False),
+                           ('https://github.com/me/repo; rm -rf ~', False),
+                           ('git@github.com:me/repo.git', False)):
+            result = run('bash', '-c', 'source "$1"; valid_private_url "$2"', 'bash', str(EXTRAS), url)
+            self.assertEqual(result.returncode == 0, valid, url)
+
     def test_agents_has_no_private_defaults(self):
         # The repository is public: the remote machine comes from the user's own configuration.
         for path in (AGENTS, AGENT_START, *AGENTS.parent.glob('agents.completion.*')):

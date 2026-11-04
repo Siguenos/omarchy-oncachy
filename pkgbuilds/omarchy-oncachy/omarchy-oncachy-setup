@@ -56,6 +56,40 @@ sddm_last() {
   (( EUID != 0 )) || ! id sddm >/dev/null 2>&1 || chown sddm:sddm "$SDDM_STATE"
 }
 
+# Print the number of the UEFI entry labelled LABEL that starts Limine from the
+# partition PARTUUID, or nothing.
+limine_entry() {
+  efibootmgr | awk -F'\t' -v label="$1" -v uuid="${2,,}" '
+    $1 ~ /^Boot[0-9A-F]{4}\*? / && tolower($2) ~ uuid && tolower($2) ~ /limine_x64\.efi/ {
+      name = $1; sub(/^Boot[0-9A-F]{4}\*? /, "", name)
+      if (name == label) print substr($1, 5, 4)
+    }'
+}
+
+# Show this system as Omarchy in the firmware boot menu. Only the Limine entry
+# on this system's ESP is replaced, keeping its place in the boot order; the
+# new entry exists before the old one goes.
+rename_boot_entry() {
+  [[ -d /sys/firmware/efi ]] && command -v efibootmgr >/dev/null || return 0
+  local esp='' mount source partuuid old new order
+  for mount in /boot /efi /boot/efi; do
+    findmnt -n "$mount" >/dev/null && [[ -f $mount/EFI/limine/limine_x64.efi ]] && { esp=$mount; break; }
+  done
+  [[ -n $esp ]] || return 0
+  source=$(findmnt -n -o SOURCE "$esp") || return 1
+  partuuid=$(lsblk -no PARTUUID "$source") || return 1
+  old=$(limine_entry Limine "$partuuid")
+  [[ -n $old && $old != *$'\n'* ]] || return 0
+  order=$(efibootmgr | sed -n 's/^BootOrder: //p')
+  efibootmgr --create --disk "/dev/$(lsblk -no PKNAME "$source")" --part "$(lsblk -no PARTN "$source")" \
+    --label Omarchy --loader '\EFI\limine\limine_x64.efi' >/dev/null || return 1
+  new=$(limine_entry Omarchy "$partuuid" | head -n1)
+  [[ -n $new ]] || return 1
+  efibootmgr --bootnum "$old" --delete-bootnum >/dev/null || return 1
+  efibootmgr --bootorder "$(sed "s/\b$old\b/$new/" <<< "$order")" >/dev/null || return 1
+  echo "UEFI: boot entry Boot$old (Limine) replaced by Boot$new (Omarchy)"
+}
+
 system_setup() {
   local user=${1:-} layout variant
   read -r layout variant <<< "$(keyboard_layout)"
@@ -80,6 +114,7 @@ system_setup() {
   if [[ -z ${OMARCHY_ONCACHY_NO_SYSTEMCTL:-} ]]; then
     systemctl enable sddm.service NetworkManager.service
     systemctl set-default graphical.target
+    rename_boot_entry || echo "UEFI: could not rename the Limine boot entry; left as is."
   fi
 }
 

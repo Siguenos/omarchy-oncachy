@@ -10,7 +10,8 @@
 #                             --shell : shell seul, sans claude
 #   agents <nom>              se (re)connecte à l'agent <nom> (alias : agents attach <nom>)
 #   agents title <nom> <titre>  change le titre affiché pour <nom> (sans titre : reprend le nom)
-#   agents rm <nom>           oublie le titre de <nom> (n'arrête pas la session)
+#   agents rm [-f] <nom>      arrête l'agent <nom> sur la VM (ferme sa session screen, donc le claude dedans) et oublie son titre ;
+#                             demande confirmation, sauf avec -f
 #
 # <nom> = identifiant de la session screen (court, sans espace, ex. lot-serie).
 # <titre> = ce qui s'affiche dans la fenêtre du terminal et dans la barre en bas de chaque agent (ex. « Lot/Série — ticket 123 »).
@@ -19,7 +20,7 @@
 # Côté VM, le hook Claude Code envoie une cloche (\a) sur Notification/Stop -> fenêtre « urgente ».
 set -euo pipefail
 
-case "${1:-}" in -h|--help|help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case "${1:-}" in -h|--help|help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/agents"
 TITLES="$CONF/titles"
@@ -140,9 +141,21 @@ case "$cmd" in
              valid_name "$2"; set_title "$2" "${*:3}"; echo "Titre de $2 : ${*:3}"
              # Met aussi à jour la barre de l'agent s'il tourne déjà (sinon, au prochain attach).
              install_starter && ssh "$HOST" '~/.local/bin/agent-start' --title "$2" "$(title_b64 "$2")" || true ;;
-  rm)        [ $# -ge 2 ] || die "usage : agents rm <nom>"
-             set_title "$2" ""; echo "Titre de $2 oublié." ;;
-  -h|--help|help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//' ;;
+  rm)        shift; force=0; [ "${1:-}" = "-f" ] && { force=1; shift; }
+             [ $# -ge 1 ] || die "usage : agents rm [-f] <nom>"
+             valid_name "$1"
+             if agent_exists "$1"; then
+               if [ "$force" != 1 ]; then
+                 read -r -p "Arrêter l'agent « $1 » sur la VM (la session et le claude dedans seront fermés) ? [o/N] " rep
+                 [[ "$rep" =~ ^[oOyY]$ ]] || die "annulé"
+               fi
+               ssh "$HOST" "screen -S '$1' -X quit; rm -f ~/.local/share/agents/'$1'.screenrc"
+               agent_exists "$1" && die "la session « $1 » tourne encore" || echo "Agent $1 arrêté."
+             else
+               echo "Pas d'agent « $1 » sur la VM (agents ls)."
+             fi
+             set_title "$1" "" ;;
+  -h|--help|help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//' ;;
   *)         # raccourci : agents <nom>
              remote_sessions | cut -f1 | grep -qx "$cmd" || die "pas d'agent « $cmd » (agents ls ; agents new $cmd [titre])"
              connect "$cmd" ;;

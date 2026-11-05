@@ -3,11 +3,11 @@
 # desktop runtime and defaults, never Omarchy's system and boot stack.
 pkgbase=omcachy
 pkgname=(omcachy omcachy-desktop)
-pkgver=4.0.6
-pkgrel=11
+pkgver=4.5.0
+pkgrel=1
 # Upstream tag and the commit it pointed to when reviewed (bin/bump-omarchy.sh).
-_tag=v4.0.6
-_commit=237f1b4071a0bff2296c6d740ba2b9fd695ebfa0
+_tag=v4.5.0
+_commit=ac2690cd7be4f47e4a255f5e2e78d904d436b068
 arch=(x86_64)
 url='https://github.com/Siguenos/omcachy'
 license=(MIT)
@@ -23,7 +23,7 @@ source=("omarchy::git+https://github.com/omacom/omarchy.git#commit=$_commit"
         agent-start
         agents.completion.bash
         agents.completion.fish)
-sha256sums=('f89ae5e85d18d8364f5c89ae05cd0fd170a8c4c93dd62e396b2b0a7fa5be4428'
+sha256sums=('c31a1cb76aa89e78254603f7ea6deecd9ed7e78309befd9a0b70ddbf015468ba'
             'SKIP'
             'SKIP'
             'SKIP'
@@ -163,6 +163,7 @@ package_omcachy-desktop() {
     alsa-utils
     asdcontrol
     avahi
+    base-devel
     bash-completion
     bat
     bluez
@@ -172,18 +173,17 @@ package_omcachy-desktop() {
     brightnessctl
     btop
     chromium
-    clang
     cliamp
     cups
     cups-filters
     cups-pk-helper
     ddcutil
+    disktree-bin
     docker
     docker-buildx
     docker-compose
     dosfstools
     dotnet-runtime
-    dua-cli
     evince
     exfatprogs
     expac
@@ -191,14 +191,21 @@ package_omcachy-desktop() {
     fakeroot
     fastfetch
     fcitx5
+    fcitx5-chewing
+    fcitx5-chinese-addons
     fcitx5-gtk
+    fcitx5-hangul
+    fcitx5-mozc
     fcitx5-qt
+    fcitx5-table-extra
     fd
+    ffmpeg
     ffmpegthumbnailer
     fontconfig
     foot
     fzf
     git
+    gliff
     gnome-disk-utility
     gnome-keyring
     gnome-themes-extra
@@ -209,6 +216,7 @@ package_omcachy-desktop() {
     gvfs-nfs
     gvfs-smb
     herdr
+    hype
     hyprland
     hyprland-guiutils
     hyprland-preview-share-picker
@@ -220,21 +228,19 @@ package_omcachy-desktop() {
     inotify-tools
     inxi
     jq
-    kdenlive
-    lazydocker
     lazygit
     less
     libreoffice-fresh
     libsecret
     libvips
     libyaml
-    llvm
     localsend
     lua51
     luarocks
     man-db
     mariadb-libs
     mise-bin
+    monologue
     moonlight-qt
     mpv
     mpv-mpris
@@ -246,12 +252,15 @@ package_omcachy-desktop() {
     noto-fonts-emoji
     nss-mdns
     nvim
-    obs-studio
     obsidian
     omacalc
     omacut
+    omarchy-hyprland-titlebars
     omarchy-nvim
+    omarchy-power-profiles-daemon
+    omasnap
     omawrite
+    owe
     pacman-contrib
     pamixer
     pinta
@@ -260,24 +269,28 @@ package_omcachy-desktop() {
     pipewire-pulse
     plocate
     postgresql-libs
-    power-profiles-daemon
     python-gobject
     python-poetry-core
     qemu-user-static-binfmt
     qrencode
+    qt6-base
+    qt6-declarative
     qt6-imageformats
+    qt6-multimedia
+    qt6-svg
     qt6-wayland
     quickshell
     ripgrep
     ruby
     sddm
+    signed
     slurp
     socat
     starship
+    superwhisper-bin
     sushi
     system-config-printer
     tealdeer
-    tensaku
     tesseract
     tesseract-data-eng
     tmux
@@ -293,6 +306,7 @@ package_omcachy-desktop() {
     unzip
     usage
     uwsm
+    vi
     whois
     wireless-regdb
     wireplumber
@@ -302,7 +316,7 @@ package_omcachy-desktop() {
     xdg-desktop-portal-gtk
     xdg-desktop-portal-hyprland
     xdg-terminal-exec
-    xournalpp
+    xorg-xsetroot
     yaru-icon-theme
     yay
     yt-dlp

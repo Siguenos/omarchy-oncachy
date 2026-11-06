@@ -10,8 +10,6 @@ PKGBUILD = ROOT / 'pkgbuilds/omcachy/PKGBUILD'
 SETUP = ROOT / 'pkgbuilds/omcachy/omcachy-setup'
 EXTRAS = ROOT / 'pkgbuilds/omcachy/omcachy-extras'
 VPN = ROOT / 'pkgbuilds/omcachy/vpn-switch'
-AGENTS = ROOT / 'pkgbuilds/omcachy/agents'
-AGENT_START = ROOT / 'pkgbuilds/omcachy/agent-start'
 # Upstream checkout at the pinned commit, e.g. .cache/build/omcachy/src/omarchy
 # after `bin/build.sh --nobuild`.
 SOURCE = os.environ.get('OMARCHY_TEST_SOURCE')
@@ -30,7 +28,7 @@ def pkgbuild_value(expression):
 class ScriptTests(unittest.TestCase):
     def test_bash_syntax(self):
         for path in [*ROOT.glob('bin/*.sh'), *ROOT.glob('iso/*.sh'), *ROOT.glob('iso/calamares/omcachy-*'),
-                     ROOT / 'install.sh', PKGBUILD, SETUP, EXTRAS, AGENTS, AGENT_START]:
+                     ROOT / 'install.sh', PKGBUILD, SETUP, EXTRAS]:
             result = run('bash', '-n', str(path))
             self.assertEqual(result.returncode, 0, f'{path}: {result.stderr}')
 
@@ -106,33 +104,6 @@ class ScriptTests(unittest.TestCase):
             self.assertTrue((home / '.local/share/omcachy/private/scripts').is_dir())
             self.assertTrue((home / '.local/state/omcachy/setup-done').is_file())
             self.assertFalse((home / '.config/omarchy-oncachy').exists())
-
-    def test_agent_title_bar(self):
-        # The title ends up in a screen configuration line: nothing in it may mean something to screen.
-        title = 'Lot/S\u00e9rie \u2014 l\'agent "x" 50% $HOME \\ ^a'
-        result = run('bash', '-c', 'source "$1"; bar_rc lot-serie "$2"', 'bash', str(AGENT_START), title)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        lines = result.stdout.splitlines()
-        self.assertEqual(lines[0], 'startup_message off')
-        bar = lines[1]
-        self.assertTrue(bar.startswith('hardstatus alwayslastline "'), bar)
-        text = bar[len('hardstatus alwayslastline "'):-1]
-        self.assertNotIn('"', text)
-        for char in ('\\', '$', '^'):
-            self.assertNotIn(char, text)
-        self.assertEqual(text.count('%'), text.count('%{') + text.count('%=') + text.count('%c'))
-        self.assertIn('lot-serie', text)
-        # Without a title, the name alone is shown.
-        plain = run('bash', '-c', 'source "$1"; bar_rc lot-serie lot-serie', 'bash', str(AGENT_START))
-        self.assertEqual(plain.stdout.count('lot-serie'), 1)
-
-    def test_agents_has_no_private_defaults(self):
-        # The repository is public: the remote machine comes from the user's own configuration.
-        for path in (AGENTS, AGENT_START, *AGENTS.parent.glob('agents.completion.*')):
-            text = path.read_text()
-            self.assertNotIn('.corp', text, path.name)
-            self.assertNotIn('alex', text.lower(), path.name)
-            self.assertNotIn('bitwarden', text.lower(), path.name)
 
     def test_version_matches_tag(self):
         tag = pkgbuild_value('echo "$_tag"')
@@ -350,7 +321,7 @@ class UpstreamTests(unittest.TestCase):
             directory = Path(tmp)
             (directory / 'src').mkdir()
             (directory / 'src/omarchy').symlink_to(Path(SOURCE).resolve(), target_is_directory=True)
-            for local in (SETUP, EXTRAS, VPN, AGENTS, AGENT_START, *AGENTS.parent.glob('agents.completion.*')):
+            for local in (SETUP, EXTRAS, VPN):
                 (directory / 'src' / local.name).symlink_to(local)
             (directory / 'tools').mkdir()
             mock = directory / 'tools/magick'
@@ -377,11 +348,8 @@ class UpstreamTests(unittest.TestCase):
             for path in ('etc/fastfetch/config.jsonc', 'etc/xdg/kitty/kitty.conf', 'usr/share/pixmaps/omarchy.png',
                          'usr/share/omarchy/default/bashrc', 'usr/share/omarchy/logo.txt'):
                 self.assertTrue((payload / path).is_file(), path)
-            for command in ('omarchy-update', 'omcachy-setup', 'omcachy-extras', 'vpn-switch', 'agents'):
+            for command in ('omarchy-update', 'omcachy-setup', 'omcachy-extras', 'vpn-switch'):
                 self.assertTrue((payload / 'usr/bin' / command).stat().st_mode & 0o111, command)
-            for path in ('usr/share/omcachy/agent-start', 'usr/share/bash-completion/completions/agents',
-                         'usr/share/fish/vendor_completions.d/agents.fish'):
-                self.assertTrue((payload / path).is_file(), path)
             for forbidden in ('boot', 'etc/mkinitcpio.conf.d', 'etc/limine-entry-tool.d',
                               'etc/pacman.conf', 'etc/os-release', 'etc/sudoers.d', 'etc/pam.d',
                               'etc/sddm.conf', 'etc/sddm.conf.d', 'etc/snapper', 'etc/skel'):

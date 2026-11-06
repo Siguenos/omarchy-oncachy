@@ -4,7 +4,7 @@
 pkgbase=omcachy
 pkgname=(omcachy omcachy-desktop)
 pkgver=4.0.6
-pkgrel=11
+pkgrel=12
 # Upstream tag and the commit it pointed to when reviewed (bin/bump-omarchy.sh).
 _tag=v4.0.6
 _commit=237f1b4071a0bff2296c6d740ba2b9fd695ebfa0
@@ -18,16 +18,8 @@ source=("omarchy::git+https://github.com/omacom/omarchy.git#commit=$_commit"
         omcachy-setup
         omcachy-extras
         omcachy.install
-        vpn-switch
-        agents
-        agent-start
-        agents.completion.bash
-        agents.completion.fish)
+        vpn-switch)
 sha256sums=('f89ae5e85d18d8364f5c89ae05cd0fd170a8c4c93dd62e396b2b0a7fa5be4428'
-            'SKIP'
-            'SKIP'
-            'SKIP'
-            'SKIP'
             'SKIP'
             'SKIP'
             'SKIP'
@@ -146,11 +138,6 @@ UPGRADE
   ln -s omcachy-setup "$pkgdir/usr/bin/omarchy-oncachy-setup"
   ln -s omcachy-extras "$pkgdir/usr/bin/omarchy-oncachy-extras"
   install -Dm755 "$srcdir/vpn-switch" "$pkgdir/usr/bin/vpn-switch"
-  # agents: Claude agents in named screen sessions on a remote machine (Remote Control on).
-  install -Dm755 "$srcdir/agents" "$pkgdir/usr/bin/agents"
-  install -Dm755 "$srcdir/agent-start" "$pkgdir/usr/share/omcachy/agent-start"
-  install -Dm644 "$srcdir/agents.completion.bash" "$pkgdir/usr/share/bash-completion/completions/agents"
-  install -Dm644 "$srcdir/agents.completion.fish" "$pkgdir/usr/share/fish/vendor_completions.d/agents.fish"
 }
 
 package_omcachy-desktop() {
